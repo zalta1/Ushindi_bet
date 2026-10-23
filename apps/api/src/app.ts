@@ -13,6 +13,32 @@ import { ApiError } from './errors.js'
 import { warmPasswordHasher } from './passwords.js'
 import { registerPublicRoutes } from './routes/public.js'
 
+function waitUntilReady(redis: Redis, timeoutMs: number): Promise<void> {
+  if (redis.status === 'ready') return Promise.resolve()
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      cleanup()
+      reject(new Error('redis connect timeout'))
+    }, timeoutMs)
+    const onReady = () => {
+      cleanup()
+      resolve()
+    }
+    const onError = (err: Error) => {
+      cleanup()
+      reject(err)
+    }
+    const cleanup = () => {
+      clearTimeout(timer)
+      redis.off('ready', onReady)
+      redis.off('error', onError)
+    }
+    redis.on('ready', onReady)
+    redis.on('error', onError)
+    if (redis.status === 'ready') onReady()
+  })
+}
+
 async function connectRedis(cfg: AppConfig): Promise<Redis | null> {
   if (!cfg.redisUrl) return null
   const redis = new Redis(cfg.redisUrl, {
@@ -21,7 +47,13 @@ async function connectRedis(cfg: AppConfig): Promise<Redis | null> {
     connectTimeout: 2000,
   })
   try {
+    // enableOfflineQueue is false, so a ping issued before the socket is
+    // writable throws even when Redis is up.
+    await waitUntilReady(redis, 2000)
     await redis.ping()
+    redis.on('error', (err) => {
+      console.error('redis error', err.message)
+    })
     return redis
   } catch (err) {
     redis.disconnect()
