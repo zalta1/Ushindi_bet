@@ -10,6 +10,8 @@ process.env.DATABASE_URL = process.env.DATABASE_URL ?? 'postgres://ushindi:local
 process.env.MIGRATIONS_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../db/migrations')
 delete process.env.SUPER_ADMIN_PHONE
 delete process.env.SUPER_ADMIN_PASSWORD
+delete process.env.ADMIN_PHONE
+delete process.env.ADMIN_PASSWORD
 delete process.env.REDIS_URL
 
 const dbName = new URL(process.env.DATABASE_URL).pathname
@@ -100,7 +102,7 @@ test('a deposit below 30000 is rejected and a valid one stays pending', async ()
 test('an admin can raise the minimum and the API follows it', async () => {
   const adminPhone = phone(81)
   const admin = await player(adminPhone)
-  await pool.query(`UPDATE users SET role = 'super_admin' WHERE phone = $1`, [adminPhone])
+  await pool.query(`UPDATE users SET role = 'admin' WHERE phone = $1`, [adminPhone])
   const saved = await admin.send('PATCH', '/api/admin/config', { minDeposit: 40000 })
   assert.equal(saved.status, 200)
   assert.equal(saved.json.minDeposit, 40000)

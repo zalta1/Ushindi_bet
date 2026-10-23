@@ -11,6 +11,7 @@ import {
   clearSessionCookies,
   CSRF_COOKIE,
   issueSession,
+  stopImpersonation,
   newToken,
   publicUser,
   revokeAllSessions,
@@ -119,7 +120,8 @@ export function registerAuthRoutes(app: FastifyInstance, cfg: AppConfig) {
       if (!phone || Object.keys(fields).length) throw fieldError(fields)
 
       const passwordHash = await hashPassword(rawPassword)
-      const role = cfg.superAdminPhone && phone === normalizeTzPhone(cfg.superAdminPhone) ? 'super_admin' : 'player'
+      const adminPhone = normalizeTzPhone(cfg.adminPhone || cfg.superAdminPhone)
+      const role = adminPhone && phone === adminPhone ? 'admin' : 'player'
       try {
         const userId = await withTx(cfg, async (client) => {
           const inserted = await client.query<{ id: string }>(
@@ -172,8 +174,8 @@ export function registerAuthRoutes(app: FastifyInstance, cfg: AppConfig) {
         await dummyVerify(body.password)
         throw new ApiError(401, 'invalid_credentials')
       }
-      const { rows } = await getPool(cfg).query<UserRow>(
-        `SELECT id, phone, password_hash, role, failed_login_count, locked_until
+      const { rows } = await getPool(cfg).query<UserRow & { closed_at: Date | null }>(
+        `SELECT id, phone, password_hash, role, failed_login_count, locked_until, closed_at
            FROM users WHERE phone = $1`,
         [phone],
       )
@@ -193,6 +195,7 @@ export function registerAuthRoutes(app: FastifyInstance, cfg: AppConfig) {
         if (until) throw new ApiError(429, 'locked', { minutes: lockMinutes(until), field: 'password' })
         throw new ApiError(401, 'invalid_credentials', { field: 'password' })
       }
+      if (user.closed_at) throw new ApiError(403, 'account_closed')
       await getPool(cfg).query(
         `UPDATE users SET failed_login_count = 0, locked_until = NULL, updated_at = now() WHERE id = $1`,
         [user.id],
@@ -215,9 +218,41 @@ export function registerAuthRoutes(app: FastifyInstance, cfg: AppConfig) {
     await mutation(req)
     if (!req.auth) throw new ApiError(401, 'unauthenticated')
     assertCsrf(req, req.auth.csrfHash)
+    if (req.auth.readOnly) {
+      const impersonatorId = req.auth.impersonatorUserId
+      if (impersonatorId) {
+        const actor = await getPool(cfg).query<{ phone: string }>(`SELECT phone FROM users WHERE id = $1`, [impersonatorId])
+        await getPool(cfg).query(
+          `INSERT INTO audit_log (actor_user_id, actor, action, payload)
+           VALUES ($1, $2, 'admin.impersonate.stop', $3::jsonb)`,
+          [impersonatorId, actor.rows[0]?.phone ?? 'admin', JSON.stringify({ targetUserId: req.auth.userId, impersonationId: req.auth.impersonationId, via: 'logout' })],
+        )
+      }
+      await stopImpersonation(cfg, req, reply)
+      return { ok: true, restored: true }
+    }
     await revokeFamily(cfg, req.auth.familyId)
     await recordAuth(cfg, 'logout', clientIp(req), req.auth.userId, req.auth.phone)
     clearSessionCookies(reply, cfg)
+    return { ok: true }
+  })
+
+  app.post('/api/auth/impersonation/stop', async (req, reply) => {
+    await mutation(req)
+    if (!req.auth) throw new ApiError(401, 'unauthenticated')
+    assertCsrf(req, req.auth.csrfHash)
+    const impersonatorId = req.auth.impersonatorUserId
+    const targetId = req.auth.userId
+    const impersonationId = req.auth.impersonationId
+    if (impersonatorId) {
+      const actor = await getPool(cfg).query<{ phone: string }>(`SELECT phone FROM users WHERE id = $1`, [impersonatorId])
+      await getPool(cfg).query(
+        `INSERT INTO audit_log (actor_user_id, actor, action, payload)
+         VALUES ($1, $2, 'admin.impersonate.stop', $3::jsonb)`,
+        [impersonatorId, actor.rows[0]?.phone ?? 'admin', JSON.stringify({ targetUserId: targetId, impersonationId })],
+      )
+    }
+    await stopImpersonation(cfg, req, reply)
     return { ok: true }
   })
 

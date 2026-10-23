@@ -12,6 +12,8 @@ export type SessionUser = {
   bonusBalanceTzs: number
   admin: boolean
   permissions: string[]
+  readOnly?: boolean
+  impersonatorUserId?: string | null
 }
 
 let boot: Promise<void> | null = null

@@ -9,6 +9,9 @@ import { permissionsFor, type AccountRole } from '../admin/roles.js'
 export const ACCESS_COOKIE = 'ushindi_sid'
 export const REFRESH_COOKIE = 'ushindi_refresh'
 export const CSRF_COOKIE = 'ushindi_csrf'
+export const HOLD_ACCESS = 'ushindi_hold_sid'
+export const HOLD_REFRESH = 'ushindi_hold_refresh'
+export const HOLD_CSRF = 'ushindi_hold_csrf'
 
 export type AuthContext = {
   sessionId: string
@@ -21,6 +24,9 @@ export type AuthContext = {
   kycStatus: string
   balanceTzs: number
   bonusBalanceTzs: number
+  readOnly: boolean
+  impersonatorUserId: string | null
+  impersonationId: string | null
 }
 
 declare module 'fastify' {
@@ -106,10 +112,14 @@ type SessionRow = {
   bonus_balance_tzs: string | null
   revoked_at: Date | null
   refresh_expires_at: Date
+  read_only: boolean
+  impersonator_user_id: string | null
+  impersonation_id: string | null
 }
 
 const sessionSelect = `
   SELECT s.id, s.family_id, s.user_id, s.csrf_hash, s.revoked_at, s.refresh_expires_at,
+         s.read_only, s.impersonator_user_id, s.impersonation_id,
          u.role, u.phone, u.full_name, u.kyc_status,
          w.balance_tzs, w.bonus_balance_tzs
     FROM sessions s
@@ -129,6 +139,9 @@ function toAuth(row: SessionRow): AuthContext {
     kycStatus: row.kyc_status,
     balanceTzs: money(row.balance_tzs),
     bonusBalanceTzs: money(row.bonus_balance_tzs),
+    readOnly: row.read_only,
+    impersonatorUserId: row.impersonator_user_id,
+    impersonationId: row.impersonation_id,
   }
 }
 
@@ -141,8 +154,10 @@ export function publicUser(auth: AuthContext) {
     kycStatus: auth.kycStatus,
     balanceTzs: auth.balanceTzs,
     bonusBalanceTzs: auth.bonusBalanceTzs,
-    admin: auth.role !== 'player',
-    permissions: permissionsFor(auth.role),
+    admin: auth.role === 'admin' && !auth.readOnly,
+    permissions: auth.readOnly ? [] : permissionsFor(auth.role),
+    readOnly: auth.readOnly,
+    impersonatorUserId: auth.impersonatorUserId,
   }
 }
 
@@ -153,7 +168,8 @@ export async function readAccessSession(cfg: AppConfig, req: FastifyRequest): Pr
     `${sessionSelect}
       WHERE s.access_hash = $1
         AND s.revoked_at IS NULL
-        AND s.expires_at > now()`,
+        AND s.expires_at > now()
+        AND u.closed_at IS NULL`,
     [sha256(token)],
   )
   return rows[0] ? toAuth(rows[0]) : null
@@ -206,7 +222,7 @@ export async function rotateSession(cfg: AppConfig, req: FastifyRequest, reply: 
   try {
     await client.query('BEGIN')
     const { rows } = await client.query<SessionRow>(
-      `${sessionSelect} WHERE s.refresh_hash = $1 FOR UPDATE OF s`,
+      `${sessionSelect} WHERE s.refresh_hash = $1 AND u.closed_at IS NULL FOR UPDATE OF s`,
       [sha256(token)],
     )
     const row = rows[0]
@@ -242,11 +258,13 @@ export async function rotateSession(cfg: AppConfig, req: FastifyRequest, reply: 
     await client.query(
       `INSERT INTO sessions (
          id, user_id, family_id, access_hash, refresh_hash, csrf_hash,
-         expires_at, refresh_expires_at, ip, user_agent
+         expires_at, refresh_expires_at, ip, user_agent,
+         read_only, impersonator_user_id, impersonation_id
        ) VALUES (
          $1, $2, $3, $4, $5, $6,
          now() + ($7 || ' seconds')::interval,
-         $8, $9, $10
+         $8, $9, $10,
+         $11, $12, $13
        )`,
       [
         id,
@@ -259,6 +277,9 @@ export async function rotateSession(cfg: AppConfig, req: FastifyRequest, reply: 
         row.refresh_expires_at,
         req.ip?.slice(0, 64) ?? null,
         String(req.headers['user-agent'] ?? '').slice(0, 200),
+        row.read_only,
+        row.impersonator_user_id,
+        row.impersonation_id,
       ],
     )
     await client.query(
@@ -296,4 +317,87 @@ export async function revokeAllSessions(cfg: AppConfig, userId: string): Promise
 
 export async function purgeExpiredSessions(cfg: AppConfig): Promise<void> {
   await getPool(cfg).query(`DELETE FROM sessions WHERE refresh_expires_at < now() - interval '1 day'`)
+}
+
+function setHoldCookies(reply: FastifyReply, cfg: AppConfig, access: string, refresh: string, csrf: string) {
+  reply.setCookie(HOLD_ACCESS, access, cookieBase(cfg, true, cfg.refreshTtlSeconds, '/'))
+  reply.setCookie(HOLD_REFRESH, refresh, cookieBase(cfg, true, cfg.refreshTtlSeconds, '/api/auth'))
+  reply.setCookie(HOLD_CSRF, csrf, cookieBase(cfg, true, cfg.refreshTtlSeconds, '/'))
+}
+
+function clearHoldCookies(reply: FastifyReply, cfg: AppConfig) {
+  reply.clearCookie(HOLD_ACCESS, cookieBase(cfg, true, 0, '/'))
+  reply.clearCookie(HOLD_REFRESH, cookieBase(cfg, true, 0, '/api/auth'))
+  reply.clearCookie(HOLD_CSRF, cookieBase(cfg, true, 0, '/'))
+}
+
+/** Swap the browser onto a short-lived read-only session for `targetUserId`. The admin cookies are held. */
+export async function beginImpersonation(
+  cfg: AppConfig,
+  reply: FastifyReply,
+  req: FastifyRequest,
+  targetUserId: string,
+  impersonationId: string,
+): Promise<AuthContext> {
+  if (!req.auth || req.auth.readOnly) throw new ApiError(409, 'already_impersonating')
+  const heldAccess = readCookie(req, ACCESS_COOKIE)
+  const heldRefresh = readCookie(req, REFRESH_COOKIE)
+  const heldCsrf = readCookie(req, CSRF_COOKIE)
+  if (!heldAccess || !heldRefresh || !heldCsrf) throw new ApiError(401, 'unauthenticated')
+
+  const access = newToken()
+  const refresh = newToken()
+  const csrf = newToken()
+  const id = randomUUID()
+  await getPool(cfg).query(
+    `INSERT INTO sessions (
+       id, user_id, family_id, access_hash, refresh_hash, csrf_hash,
+       expires_at, refresh_expires_at, ip, user_agent,
+       read_only, impersonator_user_id, impersonation_id
+     ) VALUES (
+       $1, $2, $3, $4, $5, $6,
+       now() + ($7 || ' seconds')::interval,
+       now() + interval '15 minutes',
+       $8, $9,
+       true, $10, $11
+     )`,
+    [
+      id,
+      targetUserId,
+      randomUUID(),
+      sha256(access),
+      sha256(refresh),
+      sha256(csrf),
+      String(Math.min(cfg.accessTtlSeconds, 15 * 60)),
+      req.ip?.slice(0, 64) ?? null,
+      String(req.headers['user-agent'] ?? '').slice(0, 200),
+      req.auth.userId,
+      impersonationId,
+    ],
+  )
+  setHoldCookies(reply, cfg, heldAccess, heldRefresh, heldCsrf)
+  setSessionCookies(reply, cfg, access, refresh, csrf)
+  const { rows } = await getPool(cfg).query<SessionRow>(`${sessionSelect} WHERE s.id = $1`, [id])
+  return toAuth(rows[0])
+}
+
+/** End a read-only impersonation session and put the admin cookies back. */
+export async function stopImpersonation(cfg: AppConfig, req: FastifyRequest, reply: FastifyReply): Promise<void> {
+  if (!req.auth?.readOnly) throw new ApiError(409, 'not_impersonating')
+  const access = readCookie(req, HOLD_ACCESS)
+  const refresh = readCookie(req, HOLD_REFRESH)
+  const csrf = readCookie(req, HOLD_CSRF)
+  await revokeFamily(cfg, req.auth.familyId)
+  if (req.auth.impersonationId) {
+    await getPool(cfg).query(
+      `UPDATE impersonation_sessions SET ended_at = now() WHERE id = $1 AND ended_at IS NULL`,
+      [req.auth.impersonationId],
+    )
+  }
+  clearHoldCookies(reply, cfg)
+  if (!access || !refresh || !csrf) {
+    clearSessionCookies(reply, cfg)
+    throw new ApiError(401, 'unauthenticated')
+  }
+  setSessionCookies(reply, cfg, access, refresh, csrf)
 }

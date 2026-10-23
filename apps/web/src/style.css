@@ -41,43 +41,83 @@ a.menuitem:hover,.sportbtn.menuitem:hover{background:#172a4d}:root.light a.menui
 }
 @media print{.leftpanel,.panel-toggle,.panel-backdrop{display:none!important}}
 
-/* --- Live Betting hero background video (does not change hero canvas/size) --- */
-/* Existing .hero rule above is untouched: same padding, margin, border-radius, no height/min-height added. */
+/* Hero panels stay on the dark gradient. The player site has no video layer. */
 .hero{position:relative;overflow:hidden}
-.hero-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0;pointer-events:none}
-.hero-overlay{position:absolute;inset:0;background:linear-gradient(135deg,rgba(8,16,34,.88),rgba(19,51,107,.55) 55%,rgba(0,0,0,.38));z-index:1;pointer-events:none}
-.hero-ui{position:relative;z-index:2}
-@media (prefers-reduced-motion: reduce){.hero-video,.hero-overlay{display:none!important}}
 
-.hero-side-img{position:absolute;top:8px;bottom:8px;right:48px;height:calc(100% - 16px);aspect-ratio:16/9;width:auto;max-width:45%;object-fit:contain;border-radius:10px;z-index:2;box-shadow:0 4px 14px rgba(0,0,0,.45)}
-.hero-text-live{flex:1;margin-right:calc(45% + 10px)}
-@media (max-width:640px){.hero-side-img{max-width:40%}.hero-text-live{margin-right:calc(40% + 6px)}}
-
-/* Landing hero video (replaces rotating banners) */
-.landing-hero{position:relative;overflow:hidden;border-radius:14px;margin:10px 0;aspect-ratio:16/9;max-height:460px;width:100%;display:flex;align-items:flex-end;background:#05070c}
-.landing-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0;pointer-events:none}
-.landing-overlay{position:absolute;inset:0;background:linear-gradient(0deg,rgba(0,0,0,.78) 0%,rgba(0,0,0,.25) 55%,rgba(0,0,0,.05) 100%);z-index:1;pointer-events:none}
-.landing-text{position:relative;z-index:2;padding:22px 24px;max-width:620px}
-.landing-text h1{color:var(--gold);margin:0 0 6px;font-size:clamp(22px,3.2vw,38px)}
-.landing-text p{color:#fff;margin:0 0 12px;font-size:clamp(13px,1.4vw,16px)}
+/* Landing carousel. Each slide keeps copy and art in separate boxes. */
+.landing-hero{position:relative;overflow:hidden;border-radius:14px;margin:10px 0;width:100%;min-width:0;background:radial-gradient(ellipse at 72% 46%,#1a1848 0%,#0c1428 54%,#05070c 100%);touch-action:pan-y}
+.landing-viewport{overflow:hidden;width:100%;min-width:0}
+.landing-track{display:flex;width:100%;min-width:0;max-width:100%;transition:transform .7s cubic-bezier(.22,.7,.3,1);will-change:transform}
+.landing-slide{position:relative;overflow:hidden;flex:0 0 100%;width:100%;min-width:0;box-sizing:border-box;display:grid;grid-template-columns:minmax(0,.92fr) minmax(0,1.08fr);align-items:center;align-content:center;gap:8px;padding:16px 12px 8px 22px;--emerge:.85s}
+.landing-bg{position:absolute;inset:-8%;z-index:0;pointer-events:none;background:url('./assets/slide2-bg.jpg') 72% 42% / cover no-repeat;filter:blur(1.5px);transform:scale(1.08);transform-origin:72% 42%;animation:league-zoom 22s ease-in-out infinite alternate;will-change:transform}
+.landing-shade{position:absolute;inset:0;z-index:1;pointer-events:none;background:linear-gradient(90deg,rgba(5,7,12,.92) 0%,rgba(5,7,12,.72) 36%,rgba(5,7,12,.34) 64%,rgba(5,7,12,.48) 100%)}
+@keyframes league-zoom{from{transform:scale(1.08)}to{transform:scale(1.18)}}
+.landing-slide:has(.landing-planes){--emerge:1.05s}
+.landing-text,.landing-art{position:relative;z-index:2}
+.landing-text{min-width:0;max-width:520px;padding:4px 0}
+.landing-text h2{color:var(--gold);margin:0 0 6px;font-size:clamp(22px,2.2vw,36px);line-height:1.12}
+.landing-text p{color:#fff;margin:0 0 12px;font-size:clamp(13px,1.15vw,16px);line-height:1.35}
+.landing-text h2,.landing-text p,.landing-cta{opacity:0;transform:translate3d(-28px,0,0)}
+.landing-slide.is-active .landing-text h2{animation:hero-copy .55s cubic-bezier(.22,.7,.3,1) calc(var(--emerge) + .5s) both}
+.landing-slide.is-active .landing-text p{animation:hero-copy .55s cubic-bezier(.22,.7,.3,1) calc(var(--emerge) + .62s) both}
+.landing-slide.is-active .landing-cta{animation:hero-copy .55s cubic-bezier(.22,.7,.3,1) calc(var(--emerge) + .74s) both}
 .landing-cta{display:inline-block;background:var(--gold);color:#111;font-weight:700;padding:9px 18px;border-radius:999px;text-decoration:none}
-@media (max-width:760px){.landing-hero{aspect-ratio:auto;height:62vh;min-height:340px;max-height:none;border-radius:12px;margin:0 0 10px}.landing-text{padding:16px}}
-@media (prefers-reduced-motion: reduce){.landing-video{display:none}.landing-hero{background:#05070c url(/videos/landing-poster.jpg) center/cover}}
-
-.landing-players{position:absolute;inset:0;z-index:3;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .8s ease;padding:22px}
-.landing-players img{width:100%;height:100%;object-fit:contain;display:block}
-.landing-hero.ended .landing-players{opacity:1}
-.landing-hero.ended .landing-video,.landing-hero.ended .landing-overlay,.landing-hero.ended .landing-text{opacity:0;visibility:hidden;transition:opacity .8s ease,visibility 0s .8s}
-.landing-hero{background:radial-gradient(ellipse at center,#0f2550 0%,#05070c 75%)}
-/* Players image: smooth zoom in/out after video ends */
-@keyframes players-breathe{0%{transform:scale(.94)}100%{transform:scale(1.04)}}
-.landing-players img{transform-origin:center;will-change:transform}
-.landing-hero.ended .landing-players img{animation:players-breathe 6s ease-in-out 0.8s infinite alternate}
-@media (prefers-reduced-motion: reduce){.landing-hero.ended .landing-players img{animation:none}}
-/* Stadium background behind players (after video ends) */
-.landing-hero.ended{background:#05070c url(/videos/players-bg.jpg) center/cover no-repeat}
-.landing-hero.ended::before{content:"";position:absolute;inset:0;background:radial-gradient(ellipse at center,rgba(0,0,0,.05) 30%,rgba(0,0,0,.45) 100%);z-index:2;pointer-events:none}
+.landing-cta:focus-visible{outline:2px solid #fff;outline-offset:3px}
+.landing-art{min-width:0;min-height:0;height:min(340px,38vh);display:flex;align-items:center;justify-content:center;padding:16px 12px;pointer-events:none}
+.landing-art img{width:100%;height:100%;min-width:0;min-height:0;max-width:100%;max-height:100%;object-fit:contain;object-position:center;display:block;transform-origin:center;will-change:transform}
+.landing-slide.is-active .landing-planes{animation:planes-enter 1.05s cubic-bezier(.22,.7,.3,1) both}
+.landing-slide.is-active .landing-planes img{animation:planes-float 7.5s ease-in-out 1.05s infinite}
+.landing-slide.is-active .landing-players{animation:players-enter .85s cubic-bezier(.22,.7,.3,1) both}
+.landing-slide.is-active .landing-players img{animation:players-float 8s ease-in-out .85s infinite}
+.landing-dots{display:flex;justify-content:center;gap:4px;padding:2px 0 12px}
+.landing-dots button{width:28px;height:28px;min-width:28px;padding:0;border:0;border-radius:999px;background:transparent;position:relative;box-shadow:none}
+.landing-dots button::after{content:"";position:absolute;left:50%;top:50%;width:9px;height:9px;border-radius:999px;background:rgba(255,255,255,.5);transform:translate(-50%,-50%)}
+.landing-dots button[aria-selected="true"]::after{width:22px;background:var(--gold)}
+.landing-dots button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+@keyframes planes-enter{from{opacity:0;transform:translate3d(14px,10px,0)}to{opacity:1;transform:translate3d(0,0,0)}}
+@keyframes planes-float{0%,100%{transform:translate3d(0,4px,0) rotate(-0.8deg)}50%{transform:translate3d(4px,-6px,0) rotate(0.9deg)}}
+@keyframes players-enter{from{opacity:0;transform:translate3d(10px,8px,0) scale(.98)}to{opacity:1;transform:translate3d(0,0,0) scale(1)}}
+@keyframes players-float{0%,100%{transform:translate3d(0,3px,0) scale(1)}50%{transform:translate3d(0,-4px,0) scale(1.015)}}
+@keyframes hero-copy{from{opacity:0;transform:translate3d(-28px,0,0)}to{opacity:1;transform:translate3d(0,0,0)}}
+@media (max-width:1199px){
+  .landing-hero{border-radius:12px;margin:0 0 10px}
+  .landing-slide{grid-template-columns:minmax(0,1fr);padding:8px 10px 4px}
+  .landing-bg{background-position:center 22%;transform-origin:center 22%}
+  .landing-shade{background:linear-gradient(180deg,rgba(5,7,12,.22) 0%,rgba(5,7,12,.3) 40%,rgba(5,7,12,.86) 64%,rgba(5,7,12,.95) 100%)}
+  .landing-art{order:-1;width:100%;height:min(58vw,250px);padding:8px 8px 2px}
+  .landing-art img{width:100%;height:100%;object-fit:contain}
+  .landing-text{padding:8px 6px 0;max-width:none}
+}
+@media (prefers-reduced-motion: reduce){
+  .landing-track,.landing-bg{transition:none;animation:none!important}
+  .landing-bg{transform:scale(1.1)}
+  .landing-art,.landing-art img,.landing-text h2,.landing-text p,.landing-cta{animation:none!important;opacity:1!important;transform:none!important}
+}
 .form-error{color:#ff5a5a;font-weight:700;margin:0 0 8px}
+.layout.admin-route{grid-template-columns:1fr}
+.layout.admin-route .leftpanel,.layout.admin-route .slip-d{display:none!important}
+.impersonation-banner{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:10px 16px;background:#7a1f1f;color:#fff}
+.impersonation-banner button{background:#fff;color:#10201a}
+.admin-shell h2,.admin-shell h3{margin:8px 0}
+.admin-head{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.admin-nav{display:flex;gap:6px;overflow-x:auto;padding-bottom:8px}
+.admin-shell button{background:#172a4d;color:var(--text);border:1px solid #243f6b}
+:root.light .admin-shell button{background:#e8efec;color:#10201a}
+.admin-nav button{white-space:nowrap;border-radius:999px}
+.admin-nav button.active,.admin-tiles button:hover{outline:2px solid var(--gold)}
+.admin-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.admin-stats article{background:var(--card);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:4px}
+.admin-stats b{font-size:22px}
+.admin-tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;margin:12px 0}
+.admin-tiles button{text-align:left;min-height:72px;display:flex;flex-direction:column;align-items:flex-start;gap:4px}
+.admin-tiles small{color:var(--gold)}
+.admin-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid #243f6b}
+.admin-back{display:flex;align-items:center;gap:10px}
+.admin-shell label{display:block;margin:8px 0}
+.admin-shell label.check{display:flex;gap:8px;align-items:center}
+.admin-shell .muted{color:var(--muted)}
+.admin-link{color:var(--gold);font-weight:700}
+@media(max-width:800px){.admin-stats{grid-template-columns:1fr 1fr}}
 .field-hint{color:var(--muted);font-size:13px;margin:0 0 8px}
 
 .weka{max-width:440px;margin:8px auto 24px}

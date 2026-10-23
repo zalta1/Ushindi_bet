@@ -1,44 +1,32 @@
 /**
- * Seven admin roles, plus `player` for customer accounts.
- * zalta1/betstapro was not readable from this environment (the GitHub API
- * returned 404), so these names are a sportsbook back-office split:
- * super_admin, admin, finance, risk, support, marketing, compliance.
- * super_admin is seeded from SUPER_ADMIN_PHONE and is the only role that
- * can assign roles. Every check below is enforced again on the server.
+ * Two account roles. `admin` sees every admin section. `player` does not.
+ * The older split (super_admin, finance, risk, support, marketing,
+ * compliance) was removed. Migration 005 turns those rows into admin.
+ * Every check here is enforced again on the server. Writes are audited.
  */
-export const ADMIN_ROLES = [
-  'super_admin',
-  'admin',
-  'finance',
-  'risk',
-  'support',
-  'marketing',
-  'compliance',
-] as const
+export const ADMIN_ROLES = ['admin'] as const
 
 export type AdminRole = (typeof ADMIN_ROLES)[number]
 export type AccountRole = AdminRole | 'player'
 
 export const PERMISSIONS = {
-  'config.read': ['super_admin', 'admin', 'risk'],
-  'config.write': ['super_admin', 'admin'],
-  'users.read': ['super_admin', 'admin', 'finance', 'risk', 'support', 'compliance'],
-  'roles.write': ['super_admin'],
-  'audit.read': ['super_admin', 'admin', 'finance', 'risk', 'compliance'],
-  'kyc.read': ['super_admin', 'admin', 'support', 'compliance'],
-  'auth_events.read': ['super_admin', 'compliance', 'risk'],
+  'config.read': ['admin'],
+  'config.write': ['admin'],
+  'users.read': ['admin'],
+  'roles.write': ['admin'],
+  'audit.read': ['admin'],
+  'kyc.read': ['admin'],
+  'auth_events.read': ['admin'],
 } as const
 
 export type Permission = keyof typeof PERMISSIONS
 
-const adminSet = new Set<string>(ADMIN_ROLES)
-
 export function isAdminRole(role: string): role is AdminRole {
-  return adminSet.has(role)
+  return role === 'admin'
 }
 
 export function isAccountRole(role: string): role is AccountRole {
-  return role === 'player' || isAdminRole(role)
+  return role === 'player' || role === 'admin'
 }
 
 export function hasPermission(role: string, permission: Permission): boolean {

@@ -8,7 +8,8 @@ Swahili is the default language. English and the dark/light theme are unchanged.
 
 ```bash
 cp .env.example .env
-# Edit .env. Change POSTGRES_PASSWORD and SUPER_ADMIN_PASSWORD before anyone else can reach this machine.
+# Edit .env. Change POSTGRES_PASSWORD and ADMIN_PASSWORD before anyone else can reach this machine.
+# SUPER_ADMIN_PHONE and SUPER_ADMIN_PASSWORD still work if the new names are empty.
 docker compose up --build
 ```
 
@@ -18,9 +19,11 @@ docker compose up --build
 
 Sign up with a Tanzanian mobile number and a password of at least 12 characters that includes a letter and a number. Name and date of birth are not required at sign-up. There is no SMS code. After sign-up the app opens `/deposit`. The balance shown for a signed-in user comes from Postgres and starts at 0. A rejected sign-up names the field (`fields.password` is `min_length`, `letter_and_digit`, `contains_phone`, or `common`). A locked login includes `minutes`.
 
-The deposit page asks for at least `MIN_DEPOSIT_TZS` (30,000 by default). `POST /api/deposits` checks the amount and the phone and stores a pending row. It does not credit the ledger. An admin can change the minimum from `/admin`.
+The deposit page asks for at least `MIN_DEPOSIT_TZS` (30,000 by default). `POST /api/deposits` checks the amount and the phone and stores a pending row. It does not credit the ledger. An admin can change the minimum from `/admin`. That change is stored in Postgres and is still there after a restart.
 
-The phone in `SUPER_ADMIN_PHONE` is created as `super_admin` on startup when `SUPER_ADMIN_PASSWORD` is set. Sign in with that phone and open `/admin`. Any other account that opens `/admin` sees the admin gate. The API rejects admin calls on the server.
+The phone in `ADMIN_PHONE` (or `SUPER_ADMIN_PHONE`) is created as `admin` on startup when the matching password is set. There is one staff role. Older `super_admin`, finance, risk, support, marketing, and compliance rows are migrated to `admin`. Sign in with that phone and open `/admin`. Any player who opens `/admin` sees the admin gate. The API rejects admin calls from anyone who is not an admin.
+
+`/admin` follows the PesaBetPro section list. Overview counts come from the database. Settings, admin accounts, users, the audit log, wallet reconciliation, banners, announcements, and notifications work. Payments, sports, games, SMS, and support stay in the menu as coming soon. An admin can add or remove other admins and cannot remove the last one. Balance changes write the ledger with a reason. Closing an account sets `closed_at` and does not delete the user. Impersonation is a short read-only session and is written to the audit log. The phone in `ADMIN_PHONE` is promoted to admin again on startup, so that account can be recovered.
 
 If you previously started the old demo stack, reset the database volume once:
 
@@ -44,6 +47,7 @@ DATABASE_URL=postgres://ushindi:local_dev_only_change_me_1@127.0.0.1:5432/ushind
 - Login is rate limited and an account locks for 15 minutes after 5 bad passwords.
 - Money is a `BIGINT` count of whole shillings. `wallet_credit`, `wallet_debit`, and `place_bet_atomic` lock the wallet row, write the append-only ledger, and update the cached balance in one database transaction. Do not update `wallets.balance_tzs` from application code.
 - Admin actions are appended to `audit_log`. Role checks happen on every request from the database, not from the cookie.
-- `.env.example` is a local placeholder. The process will not boot in production while `SUPER_ADMIN_PASSWORD` is still that placeholder. Set `COOKIE_SECURE=true` only behind HTTPS.
+- `.env.example` is a local placeholder. The process will not boot in production while `ADMIN_PASSWORD` or `SUPER_ADMIN_PASSWORD` is still that placeholder. Set `COOKIE_SECURE=true` only behind HTTPS.
+- Admin writes are appended to `audit_log`. The server checks that the caller is an admin on every request. Players cannot open those routes.
 
 Real launch still needs a Gaming Board of Tanzania licence, a payment provider, a licensed odds feed, KYC, and legal review. Those are not in this step.

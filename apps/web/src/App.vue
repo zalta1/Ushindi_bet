@@ -5,6 +5,7 @@ import Betslip from './components/Betslip.vue'
 import { useWallet, useSlip, useMatches, useAuth } from './stores/store'
 import { fmt, sportsDetailed, promos } from './data/mock'
 import { useI18n } from 'vue-i18n'
+import { api } from './api'
 
 const w = useWallet(), slip = useSlip(), ms: any = useMatches(), auth = useAuth(), router = useRouter(), route = useRoute(), { locale, t } = useI18n()
 const age = ref(!localStorage.getItem('age18'))
@@ -24,8 +25,13 @@ function togglePanel() {
 function closeMobile() { mobileOpen.value = false }
 watch(() => route.path, closeMobile)
 
+const isAdminRoute = computed(() => route.path.startsWith('/admin'))
 function confirmAge() { localStorage.setItem('age18', '1'); age.value = false }
 async function onLogout() { await auth.logout(); router.push('/') }
+async function stopImpersonation() {
+  await api('/api/auth/impersonation/stop', { method: 'POST', json: {} })
+  await auth.loadMe()
+}
 function setLang(l: string) { locale.value = l; localStorage.setItem('lang', l) }
 function toggleTheme() { document.documentElement.classList.toggle('light') }
 function pick(s: string) { ms.setSport(s); closeMobile(); router.push('/') }
@@ -47,6 +53,10 @@ const sportIcon = (name: string) => ({ Football: '⚽', Basketball: '🏀', Tenn
 
 <template>
   <div v-if="age" class="age"><div><h2>Ushindi Bet — 18+ Only</h2><p>Ni lazima uwe na miaka 18+. Kubeti kunahusisha hatari. / You must be 18+. Gambling involves risk.</p><button @click="confirmAge">Nina miaka 18+ / I am 18+</button> <RouterLink to="/responsible-gambling">Responsible Gambling</RouterLink></div></div>
+  <div v-if="auth.user?.readOnly" class="impersonation-banner" data-testid="impersonation-banner">
+    <span>{{ $t('impersonating', { phone: auth.user.phone }) }}</span>
+    <button type="button" @click="stopImpersonation" data-testid="impersonation-stop">{{ $t('stopImpersonation') }}</button>
+  </div>
 
   <!-- Header: logo, panel toggle, balance, language, theme, login, deposit ONLY (menu moved to left panel). No duplicated text nav. -->
   <header>
@@ -64,7 +74,7 @@ const sportIcon = (name: string) => ({ Football: '⚽', Basketball: '🏀', Tenn
     <RouterLink class="deposit-btn" to="/deposit">{{$t('deposit')}}</RouterLink>
   </header>
 
-  <div class="layout" :class="{ collapsed, 'drawer-open': mobileOpen }">
+  <div class="layout" :class="{ collapsed, 'drawer-open': mobileOpen, 'admin-route': isAdminRoute }">
     <div v-if="mobileOpen" class="panel-backdrop" @click="closeMobile"></div>
 
     <!-- Retractable left panel: flush at left:0, retracts fully off-edge when collapsed (header ☰ reopens it). Main menu (no Login/Deposit/Balance) + sports list below -->
@@ -93,10 +103,10 @@ const sportIcon = (name: string) => ({ Football: '⚽', Basketball: '🏀', Tenn
     </aside>
 
     <main><RouterView /></main>
-    <aside class="slip-d"><Betslip /></aside>
+    <aside v-if="!isAdminRoute" class="slip-d"><Betslip /></aside>
   </div>
 
-  <nav class="bottombar"><RouterLink to="/">Home</RouterLink><RouterLink to="/live">Live</RouterLink><button @click="slip.open=true">Slip ({{slip.items.length}})</button><RouterLink to="/casino">Casino</RouterLink><RouterLink to="/profile">Profile</RouterLink></nav>
+  <nav v-if="!isAdminRoute" class="bottombar"><RouterLink to="/">Home</RouterLink><RouterLink to="/live">Live</RouterLink><button @click="slip.open=true">Slip ({{slip.items.length}})</button><RouterLink to="/casino">Casino</RouterLink><RouterLink to="/profile">Profile</RouterLink></nav>
   <div v-if="slip.open"><Betslip /></div>
-  <footer style="padding:20px;text-align:center"><p class="seo">Ushindi Bet ni jukwaa la kubeti michezo na kasino lililotengenezwa kwa soko la Tanzania — kwa Kiswahili na Kiingereza, malipo kwa shilingi (TZS) kupitia njia za simu, na mechi za ndani na za kimataifa. Tunasisitiza uwazi: masharti ya uondoaji pesa yanaonyeshwa kabla ya kuweka amana, bonasi pekee ndiyo yenye masharti ya wagering, na zana za kudhibiti matumizi kama viwango vya amana, kupumzika na kujiondoa zinapatikana kila wakati. Ushindi Bet is an original Tanzanian sports-betting and casino platform in Swahili and English, using TZS and mobile-money — with clear withdrawal terms shown before deposit, bonus-only wagering, and responsible-gambling tools including deposit limits, cooldown and self-exclusion.</p><small>Ushindi Bet — Sandbox demo, no real money. 18+. Gaming Board of Tanzania licence required for real launch. Africa/Dar_es_Salaam · <RouterLink to="/responsible-gambling">Responsible Gambling</RouterLink> · <RouterLink to="/terms">Terms</RouterLink> · <RouterLink to="/privacy">Privacy</RouterLink></small></footer>
+  <footer v-if="!isAdminRoute" style="padding:20px;text-align:center"><p class="seo">Ushindi Bet ni jukwaa la kubeti michezo na kasino lililotengenezwa kwa soko la Tanzania — kwa Kiswahili na Kiingereza, malipo kwa shilingi (TZS) kupitia njia za simu, na mechi za ndani na za kimataifa. Tunasisitiza uwazi: masharti ya uondoaji pesa yanaonyeshwa kabla ya kuweka amana, bonasi pekee ndiyo yenye masharti ya wagering, na zana za kudhibiti matumizi kama viwango vya amana, kupumzika na kujiondoa zinapatikana kila wakati. Ushindi Bet is an original Tanzanian sports-betting and casino platform in Swahili and English, using TZS and mobile-money — with clear withdrawal terms shown before deposit, bonus-only wagering, and responsible-gambling tools including deposit limits, cooldown and self-exclusion.</p><small>Ushindi Bet — Sandbox demo, no real money. 18+. Gaming Board of Tanzania licence required for real launch. Africa/Dar_es_Salaam · <RouterLink to="/responsible-gambling">Responsible Gambling</RouterLink> · <RouterLink to="/terms">Terms</RouterLink> · <RouterLink to="/privacy">Privacy</RouterLink></small></footer>
 </template>

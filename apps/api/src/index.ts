@@ -4,12 +4,14 @@ import { buildApp } from './app.js'
 import { loadConfig } from './config.js'
 import { closePool, waitForDatabase } from './db.js'
 import { migrate } from './migrate.js'
-import { seedSuperAdmin } from './seed.js'
+import { loadPersistedSettings } from './admin/settings-store.js'
+import { seedAdmin } from './seed.js'
 
 const cfg = loadConfig()
 await waitForDatabase(cfg)
 await migrate(cfg)
-await seedSuperAdmin(cfg)
+await loadPersistedSettings(cfg)
+await seedAdmin(cfg)
 await purgeExpiredSessions(cfg)
 const app = await buildApp()
 
