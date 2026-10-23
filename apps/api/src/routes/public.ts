@@ -138,7 +138,8 @@ export function registerPublicRoutes(app: FastifyInstance) {
     const provider = body.provider ?? 'M-Pesa'
     const amount = body.amount ?? 0
     if (!providers[provider]) return { error: 'unknown provider' }
-    if (amount < (kind === 'withdraw' ? operatorConfig.minWithdraw : 500)) return { error: `minimum ${kind}` }
+    const floor = kind === 'withdraw' ? operatorConfig.minWithdraw : operatorConfig.minDeposit
+    if (!Number.isInteger(amount) || amount < floor) return { error: `minimum ${kind}`, min: floor }
     const result = kind === 'withdraw'
       ? await providers[provider].withdraw({ phone: body.phone ?? '', amount })
       : await providers[provider].deposit({ phone: body.phone ?? '', amount })

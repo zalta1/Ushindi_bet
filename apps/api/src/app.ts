@@ -33,6 +33,7 @@ function schemaFields(issues: SchemaIssue[]) {
   return { error: values.length === 1 ? values[0] : 'validation', fields }
 }
 import { warmPasswordHasher } from './passwords.js'
+import { registerDepositRoutes } from './deposits/routes.js'
 import { registerPublicRoutes } from './routes/public.js'
 
 function waitUntilReady(redis: Redis, timeoutMs: number): Promise<void> {
@@ -162,6 +163,7 @@ export async function buildApp(overrides: Partial<AppConfig> = {}): Promise<Fast
 
   registerPublicRoutes(app)
   registerAuthRoutes(app, cfg)
+  registerDepositRoutes(app, cfg)
   registerAdminRoutes(app, cfg)
 
   app.setErrorHandler((err, req, reply) => {

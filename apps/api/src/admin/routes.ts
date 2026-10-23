@@ -6,7 +6,7 @@ import { operatorConfig } from '../operator-config.js'
 import { hasPermission, isAccountRole, permissionsFor, type Permission } from './roles.js'
 import { assertCsrf, assertOrigin } from '../auth/sessions.js'
 
-const CONFIG_KEYS = ['marginBps', 'minStake', 'maxStake', 'minWithdraw', 'maxWithdraw', 'rtpBps'] as const
+const CONFIG_KEYS = ['marginBps', 'minStake', 'maxStake', 'minWithdraw', 'maxWithdraw', 'minDeposit', 'maxDeposit', 'rtpBps'] as const
 
 function requirePermission(permission: Permission) {
   return async (req: FastifyRequest) => {
@@ -51,7 +51,10 @@ export function registerAdminRoutes(app: FastifyInstance, cfg: AppConfig) {
       }
       next[key] = value
     }
-    if (next.minStake > next.maxStake || next.minWithdraw > next.maxWithdraw) throw new ApiError(400, 'validation')
+    if (next.minStake > next.maxStake || next.minWithdraw > next.maxWithdraw || next.minDeposit > next.maxDeposit) {
+      throw new ApiError(400, 'validation')
+    }
+    if (next.minDeposit < 1) throw new ApiError(400, 'validation')
     if (next.marginBps > 5000) throw new ApiError(400, 'validation')
     if (next.rtpBps < 9000 || next.rtpBps > 10000) throw new ApiError(400, 'validation')
     Object.assign(operatorConfig, next)

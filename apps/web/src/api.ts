@@ -3,12 +3,23 @@ export class ApiClientError extends Error {
   code: string
   fields: Record<string, string>
   minutes: number | null
-  constructor(status: number, code: string, fields: Record<string, string> = {}, minutes: number | null = null) {
+  minDeposit: number | null
+  maxDeposit: number | null
+  constructor(
+    status: number,
+    code: string,
+    fields: Record<string, string> = {},
+    minutes: number | null = null,
+    minDeposit: number | null = null,
+    maxDeposit: number | null = null,
+  ) {
     super(code)
     this.status = status
     this.code = code
     this.fields = fields
     this.minutes = minutes
+    this.minDeposit = minDeposit
+    this.maxDeposit = maxDeposit
   }
 }
 
@@ -55,13 +66,21 @@ export async function api<T>(path: string, opts: ApiOptions = {}): Promise<T> {
     })
     if (again.ok) return api<T>(path, { ...opts, retried: true })
   }
-  const data = await res.json().catch(() => ({})) as { error?: string; fields?: Record<string, string>; minutes?: number }
+  const data = await res.json().catch(() => ({})) as {
+    error?: string
+    fields?: Record<string, string>
+    minutes?: number
+    minDeposit?: number
+    maxDeposit?: number
+  }
   if (!res.ok) {
     throw new ApiClientError(
       res.status,
       data.error || 'request_failed',
       data.fields && typeof data.fields === 'object' ? data.fields : {},
       typeof data.minutes === 'number' ? data.minutes : null,
+      typeof data.minDeposit === 'number' ? data.minDeposit : null,
+      typeof data.maxDeposit === 'number' ? data.maxDeposit : null,
     )
   }
   return data as T

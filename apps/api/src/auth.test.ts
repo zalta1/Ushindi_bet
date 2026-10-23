@@ -51,6 +51,8 @@ beforeEach(async () => {
     maxStake: 500000,
     minWithdraw: 1000,
     maxWithdraw: 5000000,
+    minDeposit: 30000,
+    maxDeposit: 5000000,
     rtpBps: 9700,
   })
   await pool.query(`TRUNCATE auth_events, audit_log, bet_legs, bets, ledger_entries, sessions, wallets, users RESTART IDENTITY CASCADE`)

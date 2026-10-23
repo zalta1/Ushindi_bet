@@ -16,7 +16,9 @@ docker compose up --build
 - API health: http://localhost:4000/health
 - Postgres and Redis listen on localhost only (5432 and 6379)
 
-Sign up with a Tanzanian mobile number and a password of at least 12 characters that includes a letter and a number. Name and date of birth are not required at sign-up. There is no SMS code. After sign-up the app opens the wallet page (`/deposit`). The balance shown for a signed-in user comes from Postgres and starts at 0. The deposit form is still a mock and does not credit the ledger. A rejected sign-up names the field (`fields.password` is `min_length`, `letter_and_digit`, `contains_phone`, or `common`). A locked login includes `minutes`.
+Sign up with a Tanzanian mobile number and a password of at least 12 characters that includes a letter and a number. Name and date of birth are not required at sign-up. There is no SMS code. After sign-up the app opens `/deposit`. The balance shown for a signed-in user comes from Postgres and starts at 0. A rejected sign-up names the field (`fields.password` is `min_length`, `letter_and_digit`, `contains_phone`, or `common`). A locked login includes `minutes`.
+
+The deposit page asks for at least `MIN_DEPOSIT_TZS` (30,000 by default). `POST /api/deposits` checks the amount and the phone and stores a pending row. It does not credit the ledger. An admin can change the minimum from `/admin`.
 
 The phone in `SUPER_ADMIN_PHONE` is created as `super_admin` on startup when `SUPER_ADMIN_PASSWORD` is set. Sign in with that phone and open `/admin`. Any other account that opens `/admin` sees the admin gate. The API rejects admin calls on the server.
 

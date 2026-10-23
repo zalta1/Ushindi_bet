@@ -4,7 +4,7 @@ import { ApiClientError, api } from '../api'
 import { useAuth } from '../stores/store'
 
 const auth = useAuth()
-const cfg = ref({ margin: 6, minStake: 500, maxStake: 500000 })
+const cfg = ref({ margin: 6, minStake: 500, maxStake: 500000, minDeposit: 30000 })
 const status = ref('')
 const audit = ref<{ id: string; actor: string; action: string; created_at: string }[]>([])
 const kyc = [
@@ -19,8 +19,8 @@ const canAudit = computed(() => Boolean(auth.user?.permissions.includes('audit.r
 onMounted(async () => {
   if (!auth.bootstrapped) await auth.bootstrap()
   if (!canReadConfig.value) return
-  const remote = await api<{ marginBps: number; minStake: number; maxStake: number }>('/api/admin/config')
-  cfg.value = { margin: remote.marginBps / 100, minStake: remote.minStake, maxStake: remote.maxStake }
+  const remote = await api<{ marginBps: number; minStake: number; maxStake: number; minDeposit: number }>('/api/admin/config')
+  cfg.value = { margin: remote.marginBps / 100, minStake: remote.minStake, maxStake: remote.maxStake, minDeposit: remote.minDeposit }
   if (!canAudit.value) return
   const log = await api<{ data: { id: string; actor: string; action: string; created_at: string }[] }>('/api/admin/audit')
   audit.value = log.data
@@ -35,6 +35,7 @@ async function save() {
         marginBps: Math.round(cfg.value.margin * 100),
         minStake: cfg.value.minStake,
         maxStake: cfg.value.maxStake,
+        minDeposit: cfg.value.minDeposit,
       },
     })
     status.value = 'saved'
@@ -61,6 +62,7 @@ async function save() {
         Margin %<input type="number" v-model.number="cfg.margin" :disabled="!canWrite" data-testid="admin-margin" />
         Min stake<input type="number" v-model.number="cfg.minStake" :disabled="!canWrite" />
         Max stake<input type="number" v-model.number="cfg.maxStake" :disabled="!canWrite" />
+        Min deposit (TZS)<input type="number" v-model.number="cfg.minDeposit" :disabled="!canWrite" data-testid="admin-min-deposit" />
         <button v-if="canWrite" @click="save" data-testid="admin-save">Save</button>
         <p v-if="status === 'saved'">{{ $t('saved') }}</p>
         <p v-else-if="status" class="form-error">{{ status }}</p>
