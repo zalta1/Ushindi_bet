@@ -2,11 +2,11 @@
 import { ref, computed, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import Betslip from './components/Betslip.vue'
-import { useWallet, useSlip, useMatches } from './stores/store'
+import { useWallet, useSlip, useMatches, useAuth } from './stores/store'
 import { fmt, sportsDetailed, promos } from './data/mock'
 import { useI18n } from 'vue-i18n'
 
-const w = useWallet(), slip = useSlip(), ms: any = useMatches(), router = useRouter(), route = useRoute(), { locale, t } = useI18n()
+const w = useWallet(), slip = useSlip(), ms: any = useMatches(), auth = useAuth(), router = useRouter(), route = useRoute(), { locale, t } = useI18n()
 const age = ref(!localStorage.getItem('age18'))
 const liveCount = computed(() => ms.list.filter((m: any) => m.live).length)
 
@@ -25,6 +25,7 @@ function closeMobile() { mobileOpen.value = false }
 watch(() => route.path, closeMobile)
 
 function confirmAge() { localStorage.setItem('age18', '1'); age.value = false }
+async function onLogout() { await auth.logout(); router.push('/') }
 function setLang(l: string) { locale.value = l; localStorage.setItem('lang', l) }
 function toggleTheme() { document.documentElement.classList.toggle('light') }
 function pick(s: string) { ms.setSport(s); closeMobile(); router.push('/') }
@@ -52,10 +53,14 @@ const sportIcon = (name: string) => ({ Football: '⚽', Basketball: '🏀', Tenn
     <button class="panel-toggle" @click="togglePanel" :aria-label="collapsed ? $t('expand') : $t('collapse')" :title="collapsed ? $t('expand') : $t('collapse')">☰</button>
     <RouterLink class="logo" to="/">USHINDI BET</RouterLink>
     <span class="header-spacer"></span>
-    <span class="header-balance">{{$t('balance')}}: {{fmt(w.balance)}}</span>
+    <span class="header-balance">{{$t('balance')}}: {{fmt(auth.user ? auth.user.balanceTzs : w.balance)}}</span>
     <button @click="setLang(locale==='sw'?'en':'sw')" :title="locale==='sw' ? 'Switch to English' : 'Badili kwenda Kiswahili'">{{locale.toUpperCase()}}</button>
     <button @click="toggleTheme">Theme</button>
-    <RouterLink to="/login">{{$t('login')}}/{{$t('register')}}</RouterLink>
+    <template v-if="auth.user">
+      <span class="header-balance">{{ auth.user.phone }}</span>
+      <button @click="onLogout" data-testid="logout">{{$t('logout')}}</button>
+    </template>
+    <RouterLink v-else to="/login">{{$t('login')}}/{{$t('register')}}</RouterLink>
     <RouterLink class="deposit-btn" to="/deposit">{{$t('deposit')}}</RouterLink>
   </header>
 

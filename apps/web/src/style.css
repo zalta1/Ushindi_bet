@@ -77,3 +77,4 @@ a.menuitem:hover,.sportbtn.menuitem:hover{background:#172a4d}:root.light a.menui
 /* Stadium background behind players (after video ends) */
 .landing-hero.ended{background:#05070c url(/videos/players-bg.jpg) center/cover no-repeat}
 .landing-hero.ended::before{content:"";position:absolute;inset:0;background:radial-gradient(ellipse at center,rgba(0,0,0,.05) 30%,rgba(0,0,0,.45) 100%);z-index:2;pointer-events:none}
+.form-error{color:#ff5a5a;font-weight:700}
