@@ -29,7 +29,9 @@ const withdrawAmount = ref(10000)
 const provider = ref('M-Pesa')
 
 const amount = computed(() => {
-  const digits = amountText.value.replace(/[^\d]/g, '')
+  const raw = amountText.value
+  if (typeof raw === 'number') return Number.isSafeInteger(raw) && raw > 0 ? raw : 0
+  const digits = String(raw ?? '').replace(/[^\d]/g, '')
   if (!digits) return 0
   const n = Number(digits)
   return Number.isSafeInteger(n) ? n : 0
@@ -37,6 +39,12 @@ const amount = computed(() => {
 const quick = computed(() => QUICK.filter((value) => value >= minDeposit.value && value <= maxDeposit.value))
 const phoneOk = computed(() => Boolean(normalizeTzPhone(national.value)))
 const canSubmit = computed(() => !busy.value && amount.value >= minDeposit.value && amount.value <= maxDeposit.value && phoneOk.value)
+const shownAmountError = computed(() => {
+  if (amountError.value) return amountError.value
+  if (amount.value > 0 && amount.value < minDeposit.value) return t('depositBelowMin', { amount: tsh(minDeposit.value) })
+  if (amount.value > maxDeposit.value) return t('depositAboveMax', { amount: tsh(maxDeposit.value) })
+  return ''
+})
 
 function tsh(value: number) {
   return Math.max(0, Math.floor(value)).toLocaleString('en-US')
@@ -148,16 +156,13 @@ function withdraw() {
         <span>TZS</span>
         <input
           v-model="amountText"
-          type="number"
-          min="0"
-          step="1000"
           inputmode="numeric"
           :placeholder="$t('depositPlaceholder', { amount: tsh(minDeposit).replace(/,/g, '') })"
           data-testid="deposit-amount"
           @input="amountError = ''"
         />
       </label>
-      <p v-if="amountError" class="form-error" data-testid="deposit-amount-error">{{ amountError }}</p>
+      <p v-if="shownAmountError" class="form-error" data-testid="deposit-amount-error">{{ shownAmountError }}</p>
 
       <p class="weka-label">{{ $t('depositPhone') }}</p>
       <label class="prefix-field">
