@@ -10,6 +10,28 @@ import { readAccessSession } from './auth/sessions.js'
 import { loadConfig, type AppConfig } from './config.js'
 import { getPool } from './db.js'
 import { ApiError } from './errors.js'
+
+type SchemaIssue = {
+  instancePath?: string
+  keyword?: string
+  params?: { missingProperty?: string; additionalProperty?: string }
+}
+
+function schemaFields(issues: SchemaIssue[]) {
+  const fields: Record<string, string> = {}
+  for (const issue of issues) {
+    const missing = issue.params?.missingProperty
+    const extra = issue.params?.additionalProperty
+    const field = missing || extra || String(issue.instancePath || '').replace(/^\//, '') || 'body'
+    if (issue.keyword === 'required') fields[field] = 'required'
+    else if (issue.keyword === 'minLength') fields[field] = 'min_length'
+    else if (issue.keyword === 'maxLength') fields[field] = 'max_length'
+    else if (issue.keyword === 'additionalProperties') fields[field] = 'unexpected'
+    else if (!fields[field]) fields[field] = 'invalid'
+  }
+  const values = Object.values(fields)
+  return { error: values.length === 1 ? values[0] : 'validation', fields }
+}
 import { warmPasswordHasher } from './passwords.js'
 import { registerPublicRoutes } from './routes/public.js'
 
@@ -144,9 +166,11 @@ export async function buildApp(overrides: Partial<AppConfig> = {}): Promise<Fast
 
   app.setErrorHandler((err, req, reply) => {
     if (err instanceof ApiError) {
-      return reply.code(err.statusCode).send({ error: err.code })
+      return reply.code(err.statusCode).send({ error: err.code, ...(err.details ?? {}) })
     }
     const status = err.statusCode ?? 500
+    const validation = (err as { validation?: SchemaIssue[] }).validation
+    if (status === 400 && validation?.length) return reply.code(400).send(schemaFields(validation))
     if (status === 400) return reply.code(400).send({ error: 'validation' })
     if (status === 429) return reply.code(429).send({ error: 'rate_limited' })
     req.log.error({ err }, 'request failed')

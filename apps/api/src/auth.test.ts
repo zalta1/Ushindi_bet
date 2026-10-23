@@ -120,15 +120,23 @@ test('rejects bad sign-up input and duplicate phones', async () => {
   })
   assert.equal(young.status, 400)
   assert.equal(young.json.error, 'underage')
+  assert.equal(young.json.fields?.dob, 'underage')
+
+  const short = await client.send('POST', '/api/auth/register', {
+    phone: '0712345678',
+    password: 'Test12345!x',
+  })
+  assert.equal(short.status, 400)
+  assert.equal(short.json.error, 'weak_password')
+  assert.equal(short.json.fields?.password, 'min_length')
 
   const weak = await client.send('POST', '/api/auth/register', {
     phone: nextPhone(),
     password: 'abcdefghijkl',
-    fullName: 'Asha Juma',
-    dob: '1990-01-01',
   })
   assert.equal(weak.status, 400)
   assert.equal(weak.json.error, 'weak_password')
+  assert.equal(weak.json.fields?.password, 'letter_and_digit')
 
   const badPhone = await client.send('POST', '/api/auth/register', {
     phone: '+254712345678',
@@ -138,6 +146,13 @@ test('rejects bad sign-up input and duplicate phones', async () => {
   })
   assert.equal(badPhone.status, 400)
   assert.equal(badPhone.json.error, 'invalid_phone')
+
+  const plain = await client.send('POST', '/api/auth/register', {
+    phone: nextPhone(),
+    password,
+  })
+  assert.equal(plain.status, 201)
+  assert.equal(plain.json.user?.fullName, '')
 
   const number = nextPhone()
   assert.equal((await register(client, number)).status, 201)
@@ -161,14 +176,19 @@ test('login requires CSRF, locks the account, and accepts a good password', asyn
   assert.equal(noCsrf.statusCode, 403)
   assert.equal(noCsrf.json().error, 'csrf_invalid')
 
-  for (let i = 0; i < 5; i += 1) {
+  for (let i = 0; i < 4; i += 1) {
     const bad = await client.send('POST', '/api/auth/login', { phone: number, password: 'wrong-password-9' })
     assert.equal(bad.status, 401)
     assert.equal(bad.json.error, 'invalid_credentials')
   }
-  const locked = await client.send('POST', '/api/auth/login', { phone: number, password })
+  const locked = await client.send('POST', '/api/auth/login', { phone: number, password: 'wrong-password-9' })
   assert.equal(locked.status, 429)
   assert.equal(locked.json.error, 'locked')
+  assert.equal(locked.json.field, 'password')
+  assert.ok(locked.json.minutes >= 1 && locked.json.minutes <= 15)
+  const stillLocked = await client.send('POST', '/api/auth/login', { phone: number, password })
+  assert.equal(stillLocked.status, 429)
+  assert.equal(stillLocked.json.error, 'locked')
 
   await pool.query(`UPDATE users SET failed_login_count = 0, locked_until = NULL WHERE phone = $1`, [number])
   const good = await client.send('POST', '/api/auth/login', { phone: number, password })

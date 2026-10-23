@@ -100,7 +100,7 @@ type SessionRow = {
   role: AccountRole
   csrf_hash: string
   phone: string
-  full_name: string
+  full_name: string | null
   kyc_status: string
   balance_tzs: string | null
   bonus_balance_tzs: string | null
@@ -125,7 +125,7 @@ function toAuth(row: SessionRow): AuthContext {
     role: row.role,
     csrfHash: row.csrf_hash,
     phone: row.phone,
-    fullName: row.full_name,
+    fullName: row.full_name ?? '',
     kycStatus: row.kyc_status,
     balanceTzs: money(row.balance_tzs),
     bonusBalanceTzs: money(row.bonus_balance_tzs),

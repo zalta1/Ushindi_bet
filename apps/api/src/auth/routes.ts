@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import type { AppConfig } from '../config.js'
 import { getPool, withTx } from '../db.js'
-import { ApiError } from '../errors.js'
+import { ApiError, fieldError } from '../errors.js'
 import { isAdult, normalizeName, normalizeTzPhone, passwordProblem } from '../identity.js'
 import { dummyVerify, hashPassword, verifyPassword } from '../passwords.js'
 import { isAdminRole } from '../admin/roles.js'
@@ -40,7 +40,11 @@ async function recordAuth(
   )
 }
 
-async function failLogin(cfg: AppConfig, user: UserRow, ip: string | undefined) {
+function lockMinutes(until: Date): number {
+  return Math.max(1, Math.ceil((until.getTime() - Date.now()) / 60_000))
+}
+
+async function failLogin(cfg: AppConfig, user: UserRow, ip: string | undefined): Promise<Date | null> {
   const { rows } = await getPool(cfg).query<{ locked_until: Date | null }>(
     `UPDATE users SET
        failed_login_count = CASE WHEN failed_login_count + 1 >= $2 THEN 0 ELSE failed_login_count + 1 END,
@@ -53,8 +57,10 @@ async function failLogin(cfg: AppConfig, user: UserRow, ip: string | undefined) 
      RETURNING locked_until`,
     [user.id, cfg.lockoutThreshold, String(cfg.lockoutSeconds)],
   )
-  const locked = rows[0]?.locked_until && new Date(rows[0].locked_until).getTime() > Date.now()
+  const until = rows[0]?.locked_until ? new Date(rows[0].locked_until) : null
+  const locked = Boolean(until && until.getTime() > Date.now())
   await recordAuth(cfg, locked ? 'lockout' : 'login_failure', ip, user.id, user.phone)
+  return locked ? until : null
 }
 
 function clientIp(req: { ip?: string }) {
@@ -86,12 +92,12 @@ export function registerAuthRoutes(app: FastifyInstance, cfg: AppConfig) {
         body: {
           type: 'object',
           additionalProperties: false,
-          required: ['phone', 'password', 'fullName', 'dob'],
+          required: ['phone', 'password'],
           properties: {
-            phone: { type: 'string', minLength: 9, maxLength: 20 },
-            password: { type: 'string', minLength: 12, maxLength: 128 },
-            fullName: { type: 'string', minLength: 2, maxLength: 80 },
-            dob: { type: 'string', minLength: 10, maxLength: 10 },
+            phone: { type: 'string', maxLength: 32 },
+            password: { type: 'string', maxLength: 200 },
+            fullName: { type: 'string', maxLength: 80 },
+            dob: { type: 'string', maxLength: 10 },
           },
         },
       },
@@ -99,16 +105,20 @@ export function registerAuthRoutes(app: FastifyInstance, cfg: AppConfig) {
     async (req, reply) => {
       await mutation(req)
       assertCsrf(req)
-      const body = req.body as { phone: string; password: string; fullName: string; dob: string }
-      const phone = normalizeTzPhone(body.phone)
-      if (!phone) throw new ApiError(400, 'invalid_phone')
-      const fullName = normalizeName(body.fullName)
-      if (!fullName) throw new ApiError(400, 'invalid_name')
-      if (!isAdult(body.dob)) throw new ApiError(400, 'underage')
-      const problem = passwordProblem(body.password, phone)
-      if (problem) throw new ApiError(400, problem)
+      const body = req.body as { phone?: string; password?: string; fullName?: string; dob?: string }
+      const fields: Record<string, string> = {}
+      const rawPassword = typeof body.password === 'string' ? body.password : ''
+      const phone = typeof body.phone === 'string' ? normalizeTzPhone(body.phone) : null
+      if (!phone) fields.phone = 'invalid_phone'
+      const problem = passwordProblem(rawPassword, phone ?? '')
+      if (problem) fields.password = problem
+      const fullName = typeof body.fullName === 'string' && body.fullName.trim() ? normalizeName(body.fullName) : null
+      if (typeof body.fullName === 'string' && body.fullName.trim() && !fullName) fields.fullName = 'invalid_name'
+      const dob = typeof body.dob === 'string' && body.dob.trim() ? body.dob : null
+      if (dob && !isAdult(dob)) fields.dob = 'underage'
+      if (!phone || Object.keys(fields).length) throw fieldError(fields)
 
-      const passwordHash = await hashPassword(body.password)
+      const passwordHash = await hashPassword(rawPassword)
       const role = cfg.superAdminPhone && phone === normalizeTzPhone(cfg.superAdminPhone) ? 'super_admin' : 'player'
       try {
         const userId = await withTx(cfg, async (client) => {
@@ -116,7 +126,7 @@ export function registerAuthRoutes(app: FastifyInstance, cfg: AppConfig) {
             `INSERT INTO users (phone, password_hash, full_name, dob, role)
              VALUES ($1, $2, $3, $4, $5)
              RETURNING id`,
-            [phone, passwordHash, fullName, body.dob, role],
+            [phone, passwordHash, fullName, dob, role],
           )
           await client.query(
             `INSERT INTO wallets (user_id) VALUES ($1)`,
@@ -147,8 +157,8 @@ export function registerAuthRoutes(app: FastifyInstance, cfg: AppConfig) {
           additionalProperties: false,
           required: ['phone', 'password'],
           properties: {
-            phone: { type: 'string', minLength: 9, maxLength: 20 },
-            password: { type: 'string', minLength: 1, maxLength: 128 },
+            phone: { type: 'string', maxLength: 32 },
+            password: { type: 'string', maxLength: 200 },
           },
         },
       },
@@ -175,12 +185,13 @@ export function registerAuthRoutes(app: FastifyInstance, cfg: AppConfig) {
       }
       if (user.locked_until && new Date(user.locked_until).getTime() > Date.now()) {
         await dummyVerify(body.password)
-        throw new ApiError(429, 'locked')
+        throw new ApiError(429, 'locked', { minutes: lockMinutes(new Date(user.locked_until)), field: 'password' })
       }
       const ok = await verifyPassword(user.password_hash, body.password)
       if (!ok) {
-        await failLogin(cfg, user, clientIp(req))
-        throw new ApiError(401, 'invalid_credentials')
+        const until = await failLogin(cfg, user, clientIp(req))
+        if (until) throw new ApiError(429, 'locked', { minutes: lockMinutes(until), field: 'password' })
+        throw new ApiError(401, 'invalid_credentials', { field: 'password' })
       }
       await getPool(cfg).query(
         `UPDATE users SET failed_login_count = 0, locked_until = NULL, updated_at = now() WHERE id = $1`,
@@ -225,8 +236,8 @@ export function registerAuthRoutes(app: FastifyInstance, cfg: AppConfig) {
           additionalProperties: false,
           required: ['currentPassword', 'newPassword'],
           properties: {
-            currentPassword: { type: 'string', minLength: 1, maxLength: 128 },
-            newPassword: { type: 'string', minLength: 12, maxLength: 128 },
+            currentPassword: { type: 'string', maxLength: 200 },
+            newPassword: { type: 'string', maxLength: 200 },
           },
         },
       },
@@ -244,12 +255,13 @@ export function registerAuthRoutes(app: FastifyInstance, cfg: AppConfig) {
       if (!user) throw new ApiError(401, 'unauthenticated')
       const ok = await verifyPassword(user.password_hash, body.currentPassword)
       if (!ok) {
-        await failLogin(cfg, user, clientIp(req))
-        throw new ApiError(401, 'invalid_credentials')
+        const until = await failLogin(cfg, user, clientIp(req))
+        if (until) throw new ApiError(429, 'locked', { minutes: lockMinutes(until), field: 'password' })
+        throw new ApiError(401, 'invalid_credentials', { field: 'password' })
       }
-      if (body.currentPassword === body.newPassword) throw new ApiError(400, 'same_password')
+      if (body.currentPassword === body.newPassword) throw fieldError({ newPassword: 'same_password' })
       const problem = passwordProblem(body.newPassword, user.phone)
-      if (problem) throw new ApiError(400, problem)
+      if (problem) throw fieldError({ newPassword: problem })
       const passwordHash = await hashPassword(body.newPassword)
       await getPool(cfg).query(
         `UPDATE users SET password_hash = $2, failed_login_count = 0, locked_until = NULL, updated_at = now() WHERE id = $1`,

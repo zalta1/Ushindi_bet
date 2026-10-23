@@ -66,7 +66,7 @@ export const useAuth = defineStore('auth', {
         this.user = null
       }
     },
-    async register(input: { phone: string; password: string; fullName: string; dob: string }) {
+    async register(input: { phone: string; password: string }) {
       await ensureCsrf()
       const data = await api<{ user: SessionUser }>('/api/auth/register', { method: 'POST', json: input })
       this.user = data.user

@@ -45,14 +45,20 @@ const PLACEHOLDER_PASSWORDS = new Set([
   'changeme1234',
 ])
 
-export function passwordProblem(password: string, phone: string, allowPlaceholder = false): string | null {
-  if (typeof password !== 'string' || password.length < 12 || password.length > 128) return 'weak_password'
-  if (!/[A-Za-z]/.test(password) || !/\d/.test(password)) return 'weak_password'
-  if (!allowPlaceholder && PLACEHOLDER_PASSWORDS.has(password)) return 'weak_password'
+export const PASSWORD_MIN = 12
+export const PASSWORD_MAX = 128
+
+export type PasswordIssue = 'min_length' | 'max_length' | 'letter_and_digit' | 'contains_phone' | 'common'
+
+export function passwordProblem(password: string, phone: string, allowPlaceholder = false): PasswordIssue | null {
+  if (typeof password !== 'string' || password.length < PASSWORD_MIN) return 'min_length'
+  if (password.length > PASSWORD_MAX) return 'max_length'
+  if (!/[A-Za-z]/.test(password) || !/\d/.test(password)) return 'letter_and_digit'
+  if (!allowPlaceholder && PLACEHOLDER_PASSWORDS.has(password)) return 'common'
   const digits = phone.replace(/\D/g, '')
   const national = digits.replace(/^255/, '')
   if ((digits.length >= 9 && password.includes(digits)) || (national.length >= 9 && password.includes(national))) {
-    return 'weak_password'
+    return 'contains_phone'
   }
   return null
 }

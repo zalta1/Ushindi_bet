@@ -1,42 +1,63 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ApiClientError } from '../api'
+import { normalizeTzPhone, passwordIssue, passwordIssueKey, type PasswordIssue } from '../auth-rules'
 import { useAuth } from '../stores/store'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuth()
 const { t } = useI18n()
-const phone = ref('+255')
-const fullName = ref('')
-const dob = ref('')
+const phone = ref('')
 const password = ref('')
 const confirm = ref('')
-const errorCode = ref('')
+const fieldErrors = reactive({ phone: '', password: '', confirm: '' })
 const busy = ref(false)
 
 const mode = computed(() => route.path.includes('register') ? 'register' : route.path.includes('forgot') ? 'forgot' : 'login')
-watch(mode, () => { errorCode.value = '' })
-
-const errorKeys: Record<string, string> = {
-  invalid_phone: 'errPhone',
-  weak_password: 'errPassword',
-  validation: 'errGeneric',
-  underage: 'errAge',
-  phone_taken: 'errPhoneTaken',
-  invalid_credentials: 'errCredentials',
-  locked: 'errLocked',
-  rate_limited: 'errRate',
-  invalid_name: 'errName',
-  csrf_invalid: 'errGeneric',
-  same_password: 'errPassword',
-}
-const error = computed(() => {
-  if (!errorCode.value) return ''
-  return t(errorKeys[errorCode.value] || errorCode.value)
+watch(mode, () => {
+  fieldErrors.phone = ''
+  fieldErrors.password = ''
+  fieldErrors.confirm = ''
 })
+
+function clearErrors() {
+  fieldErrors.phone = ''
+  fieldErrors.password = ''
+  fieldErrors.confirm = ''
+}
+
+function passwordText(issue: string) {
+  return t(passwordIssueKey[issue as PasswordIssue] || 'errPassword')
+}
+
+function clientErrors() {
+  clearErrors()
+  if (!normalizeTzPhone(phone.value)) fieldErrors.phone = t('errPhone')
+  if (mode.value === 'register') {
+    const issue = passwordIssue(password.value, phone.value)
+    if (issue) fieldErrors.password = passwordText(issue)
+    if (password.value !== confirm.value) fieldErrors.confirm = t('errMismatch')
+  } else if (!password.value) {
+    fieldErrors.password = t('errCredentials')
+  }
+  return !fieldErrors.phone && !fieldErrors.password && !fieldErrors.confirm
+}
+
+function showApiError(err: ApiClientError) {
+  clearErrors()
+  if (err.fields.phone === 'invalid_phone') fieldErrors.phone = t('errPhone')
+  if (err.fields.phone === 'required') fieldErrors.phone = t('errRequired')
+  if (err.code === 'phone_taken' || err.fields.phone === 'phone_taken') fieldErrors.phone = t('errPhoneTaken')
+  const passwordIssueCode = err.fields.password
+  if (passwordIssueCode && passwordIssueCode in passwordIssueKey) fieldErrors.password = passwordText(passwordIssueCode)
+  if (err.code === 'invalid_credentials') fieldErrors.password = t('errCredentials')
+  if (err.code === 'locked') fieldErrors.password = t('errLocked', { n: err.minutes ?? 15 })
+  if (err.code === 'rate_limited') fieldErrors.password = t('errRate')
+  if (!fieldErrors.phone && !fieldErrors.password && !fieldErrors.confirm) fieldErrors.password = t('errGeneric')
+}
 
 function safeNext(value: unknown) {
   if (typeof value !== 'string') return ''
@@ -45,22 +66,18 @@ function safeNext(value: unknown) {
 }
 
 async function submit() {
-  errorCode.value = ''
-  if (mode.value === 'register' && password.value !== confirm.value) {
-    errorCode.value = 'errMismatch'
-    return
-  }
+  if (!clientErrors()) return
   busy.value = true
   try {
     if (mode.value === 'register') {
-      await auth.register({ phone: phone.value, password: password.value, fullName: fullName.value, dob: dob.value })
+      await auth.register({ phone: phone.value, password: password.value })
       await router.push('/deposit')
     } else {
       await auth.login({ phone: phone.value, password: password.value })
       await router.push(safeNext(route.query.next) || '/')
     }
   } catch (err) {
-    errorCode.value = err instanceof ApiClientError ? err.code : 'request_failed'
+    showApiError(err instanceof ApiClientError ? err : new ApiClientError(0, 'request_failed'))
   } finally {
     busy.value = false
   }
@@ -72,20 +89,19 @@ async function submit() {
   <div class="card">
     <p v-if="mode === 'forgot'">{{ $t('forgotHelp') }}</p>
     <form v-else @submit.prevent="submit">
-      <p v-if="error" class="form-error">{{ error }}</p>
-      <label>{{ $t('phoneLabel') }}</label>
-      <input v-model="phone" inputmode="tel" autocomplete="tel" data-testid="auth-phone" />
+      <label for="auth-phone">{{ $t('phoneLabel') }}</label>
+      <input id="auth-phone" v-model="phone" inputmode="tel" autocomplete="tel" placeholder="0712345678" :aria-invalid="!!fieldErrors.phone" data-testid="auth-phone" />
+      <p v-if="fieldErrors.phone" class="form-error" data-testid="auth-phone-error">{{ fieldErrors.phone }}</p>
+
+      <label for="auth-password">{{ $t('password') }}</label>
+      <p v-if="mode === 'register'" class="field-hint" data-testid="auth-password-rules">{{ $t('passwordRules') }}</p>
+      <input id="auth-password" v-model="password" type="password" :autocomplete="mode === 'register' ? 'new-password' : 'current-password'" :aria-invalid="!!fieldErrors.password" data-testid="auth-password" />
+      <p v-if="fieldErrors.password" class="form-error" data-testid="auth-password-error">{{ fieldErrors.password }}</p>
+
       <template v-if="mode === 'register'">
-        <label>{{ $t('fullName') }}</label>
-        <input v-model="fullName" autocomplete="name" data-testid="auth-name" />
-        <label>{{ $t('dob') }}</label>
-        <input v-model="dob" type="date" data-testid="auth-dob" />
-      </template>
-      <label>{{ $t('password') }}</label>
-      <input v-model="password" type="password" :autocomplete="mode === 'register' ? 'new-password' : 'current-password'" data-testid="auth-password" />
-      <template v-if="mode === 'register'">
-        <label>{{ $t('confirmPassword') }}</label>
-        <input v-model="confirm" type="password" autocomplete="new-password" data-testid="auth-confirm" />
+        <label for="auth-confirm">{{ $t('confirmPassword') }}</label>
+        <input id="auth-confirm" v-model="confirm" type="password" autocomplete="new-password" :aria-invalid="!!fieldErrors.confirm" data-testid="auth-confirm" />
+        <p v-if="fieldErrors.confirm" class="form-error" data-testid="auth-confirm-error">{{ fieldErrors.confirm }}</p>
       </template>
       <button type="submit" :disabled="busy" data-testid="auth-submit">{{ mode === 'register' ? $t('register') : $t('login') }}</button>
     </form>

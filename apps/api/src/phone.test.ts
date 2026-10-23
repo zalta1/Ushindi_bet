@@ -23,12 +23,13 @@ test('rejects underage dates of birth in Dar es Salaam', () => {
 })
 
 test('password policy requires length, a letter, and a digit', () => {
-  assert.equal(passwordProblem('short1', '+255712345678'), 'weak_password')
-  assert.equal(passwordProblem('abcdefghijkl', '+255712345678'), 'weak_password')
-  assert.equal(passwordProblem('123456789012', '+255712345678'), 'weak_password')
-  assert.equal(passwordProblem('local_dev_only_change_me_1', '+255712345678'), 'weak_password')
+  assert.equal(passwordProblem('Test12345!x', '+255712345678'), 'min_length')
+  assert.equal(passwordProblem('short1', '+255712345678'), 'min_length')
+  assert.equal(passwordProblem('abcdefghijkl', '+255712345678'), 'letter_and_digit')
+  assert.equal(passwordProblem('123456789012', '+255712345678'), 'letter_and_digit')
+  assert.equal(passwordProblem('local_dev_only_change_me_1', '+255712345678'), 'common')
   assert.equal(passwordProblem('Horse-battery-9', '+255712345678'), null)
-  assert.equal(passwordProblem('includes712345678x', '+255712345678'), 'weak_password')
+  assert.equal(passwordProblem('includes712345678x', '+255712345678'), 'contains_phone')
   assert.equal(passwordProblem('local_dev_only_change_me_1', '+255712345678', true), null)
 })
 
