@@ -40,17 +40,42 @@ test('names are trimmed and must contain letters', () => {
 })
 
 test('production refuses the example admin password', async () => {
-  const keys = ['NODE_ENV', 'DATABASE_URL', 'REDIS_URL', 'SUPER_ADMIN_PHONE', 'SUPER_ADMIN_PASSWORD', 'COOKIE_SECURE'] as const
+  const keys = ['NODE_ENV', 'DATABASE_URL', 'REDIS_URL', 'ADMIN_PHONE', 'ADMIN_PASSWORD', 'SUPER_ADMIN_PHONE', 'SUPER_ADMIN_PASSWORD', 'COOKIE_SECURE'] as const
   const saved = Object.fromEntries(keys.map((key) => [key, process.env[key]]))
   try {
     process.env.NODE_ENV = 'production'
     process.env.DATABASE_URL = process.env.DATABASE_URL ?? 'postgres://ushindi:x@127.0.0.1:5432/ushindi_test'
     process.env.REDIS_URL = 'redis://127.0.0.1:6379'
+    delete process.env.ADMIN_PHONE
+    delete process.env.ADMIN_PASSWORD
     process.env.SUPER_ADMIN_PHONE = '+255700000001'
     process.env.SUPER_ADMIN_PASSWORD = 'local_dev_only_change_me_1'
     process.env.COOKIE_SECURE = 'true'
     const { loadConfig } = await import('./config.js')
-    assert.throws(() => loadConfig(), /example SUPER_ADMIN_PASSWORD/)
+    assert.throws(() => loadConfig(), /SUPER_ADMIN_PASSWORD/)
+  } finally {
+    for (const key of keys) {
+      if (saved[key] === undefined) delete process.env[key]
+      else process.env[key] = saved[key]
+    }
+  }
+})
+
+test('ADMIN_PHONE falls back to SUPER_ADMIN_PHONE', async () => {
+  const keys = ['NODE_ENV', 'DATABASE_URL', 'ADMIN_PHONE', 'ADMIN_PASSWORD', 'SUPER_ADMIN_PHONE', 'SUPER_ADMIN_PASSWORD', 'COOKIE_SECURE'] as const
+  const saved = Object.fromEntries(keys.map((key) => [key, process.env[key]]))
+  try {
+    process.env.NODE_ENV = 'test'
+    process.env.DATABASE_URL = process.env.DATABASE_URL ?? 'postgres://ushindi:x@127.0.0.1:5432/ushindi_test'
+    process.env.COOKIE_SECURE = 'false'
+    delete process.env.ADMIN_PHONE
+    delete process.env.ADMIN_PASSWORD
+    process.env.SUPER_ADMIN_PHONE = '+255743500257'
+    process.env.SUPER_ADMIN_PASSWORD = 'Horse-battery-9'
+    const { loadConfig } = await import('./config.js')
+    const loaded = loadConfig()
+    assert.equal(loaded.adminPhone, '+255743500257')
+    assert.equal(loaded.adminPassword, 'Horse-battery-9')
   } finally {
     for (const key of keys) {
       if (saved[key] === undefined) delete process.env[key]

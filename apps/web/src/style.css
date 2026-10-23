@@ -78,6 +78,30 @@ a.menuitem:hover,.sportbtn.menuitem:hover{background:#172a4d}:root.light a.menui
 .landing-hero.ended{background:#05070c url(/videos/players-bg.jpg) center/cover no-repeat}
 .landing-hero.ended::before{content:"";position:absolute;inset:0;background:radial-gradient(ellipse at center,rgba(0,0,0,.05) 30%,rgba(0,0,0,.45) 100%);z-index:2;pointer-events:none}
 .form-error{color:#ff5a5a;font-weight:700;margin:0 0 8px}
+.layout.admin-route{grid-template-columns:1fr}
+.layout.admin-route .leftpanel,.layout.admin-route .slip-d{display:none!important}
+.impersonation-banner{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:10px 16px;background:#7a1f1f;color:#fff}
+.impersonation-banner button{background:#fff;color:#10201a}
+.admin-shell h2,.admin-shell h3{margin:8px 0}
+.admin-head{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.admin-nav{display:flex;gap:6px;overflow-x:auto;padding-bottom:8px}
+.admin-shell button{background:#172a4d;color:var(--text);border:1px solid #243f6b}
+:root.light .admin-shell button{background:#e8efec;color:#10201a}
+.admin-nav button{white-space:nowrap;border-radius:999px}
+.admin-nav button.active,.admin-tiles button:hover{outline:2px solid var(--gold)}
+.admin-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.admin-stats article{background:var(--card);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:4px}
+.admin-stats b{font-size:22px}
+.admin-tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;margin:12px 0}
+.admin-tiles button{text-align:left;min-height:72px;display:flex;flex-direction:column;align-items:flex-start;gap:4px}
+.admin-tiles small{color:var(--gold)}
+.admin-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid #243f6b}
+.admin-back{display:flex;align-items:center;gap:10px}
+.admin-shell label{display:block;margin:8px 0}
+.admin-shell label.check{display:flex;gap:8px;align-items:center}
+.admin-shell .muted{color:var(--muted)}
+.admin-link{color:var(--gold);font-weight:700}
+@media(max-width:800px){.admin-stats{grid-template-columns:1fr 1fr}}
 .field-hint{color:var(--muted);font-size:13px;margin:0 0 8px}
 
 .weka{max-width:440px;margin:8px auto 24px}

@@ -10,6 +10,8 @@ process.env.DATABASE_URL = process.env.DATABASE_URL ?? 'postgres://ushindi:local
 process.env.MIGRATIONS_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../db/migrations')
 delete process.env.SUPER_ADMIN_PHONE
 delete process.env.SUPER_ADMIN_PASSWORD
+delete process.env.ADMIN_PHONE
+delete process.env.ADMIN_PASSWORD
 delete process.env.REDIS_URL
 
 const dbName = new URL(process.env.DATABASE_URL).pathname
@@ -54,6 +56,14 @@ beforeEach(async () => {
     minDeposit: 30000,
     maxDeposit: 5000000,
     rtpBps: 9700,
+    withdrawalsEnabled: true,
+    cashoutEnabled: false,
+    welcomeBonusEnabled: false,
+    welcomeBonusTzs: 0,
+    securityDepositTzs: 0,
+    securityUnlockTzs: 0,
+    agentWhatsapp: '',
+    maintenanceMode: false,
   })
   await pool.query(`TRUNCATE auth_events, audit_log, bet_legs, bets, ledger_entries, sessions, wallets, users RESTART IDENTITY CASCADE`)
 })
@@ -254,18 +264,12 @@ test('admin routes are role checked on the server and audited', async () => {
   const otherPhone = nextPhone()
   await register(owner, ownerPhone)
   await register(other, otherPhone)
-  await pool.query(`UPDATE users SET role = 'super_admin' WHERE phone = $1`, [ownerPhone])
+  await pool.query(`UPDATE users SET role = 'admin' WHERE phone = $1`, [ownerPhone])
 
   assert.equal((await other.send('GET', '/api/admin/whoami')).status, 403)
   assert.equal((await other.send('GET', '/api/admin/config')).status, 403)
   assert.equal((await owner.send('GET', '/api/admin/config')).status, 200)
-
-  await pool.query(`UPDATE users SET role = 'marketing' WHERE phone = $1`, [otherPhone])
-  const marketing = await other.send('GET', '/api/admin/whoami')
-  assert.equal(marketing.status, 200)
-  assert.equal(marketing.json.role, 'marketing')
-  assert.deepEqual(marketing.json.permissions, [])
-  assert.equal((await other.send('PATCH', '/api/admin/config', { marginBps: 700 })).status, 403)
+  assert.equal((await owner.send('GET', '/api/admin/whoami')).json.role, 'admin')
 
   const patched = await owner.send('PATCH', '/api/admin/config', { marginBps: 700, minStake: 1000 })
   assert.equal(patched.status, 200)
@@ -277,36 +281,38 @@ test('admin routes are role checked on the server and audited', async () => {
   const otherId = (await owner.send('GET', '/api/admin/users')).json.data as { id: string; phone: string }[]
   const target = otherId.find((row) => row.phone === otherPhone)
   assert.ok(target)
-  const role = await owner.send('POST', `/api/admin/users/${target!.id}/role`, { role: 'support' })
+  const role = await owner.send('POST', `/api/admin/users/${target!.id}/role`, { role: 'admin' })
   assert.equal(role.status, 200)
   assert.equal((await other.send('GET', '/api/admin/users')).status, 200)
-  assert.equal((await other.send('PATCH', '/api/admin/config', { marginBps: 650 })).status, 403)
+  assert.equal((await other.send('PATCH', '/api/admin/config', { marginBps: 650 })).status, 200)
+  assert.equal((await other.send('POST', `/api/admin/users/${target!.id}/role`, { role: 'support' })).status, 400)
 
-  await pool.query(`UPDATE users SET role = 'player' WHERE phone = $1`, [ownerPhone])
-  assert.equal((await owner.send('GET', '/api/admin/config')).status, 403)
+  const removed = await owner.send('POST', `/api/admin/admins/${target!.id}/revoke`, {})
+  assert.equal(removed.status, 200)
+  assert.equal((await other.send('GET', '/api/admin/config')).status, 403)
 
-  await pool.query(`UPDATE users SET role = 'super_admin' WHERE phone = $1`, [ownerPhone])
   const ownerRow = await pool.query<{ id: string }>(`SELECT id FROM users WHERE phone = $1`, [ownerPhone])
-  await pool.query(`UPDATE users SET role = 'player' WHERE phone = $1`, [otherPhone])
   const last = await owner.send('POST', `/api/admin/users/${ownerRow.rows[0].id}/role`, { role: 'player' })
   assert.equal(last.status, 409)
-  assert.equal(last.json.error, 'last_super_admin')
+  assert.equal(last.json.error, 'last_admin')
 })
 
-test('the configured phone is seeded as super_admin and can sign in', async () => {
+test('the configured phone is seeded as admin and can sign in', async () => {
   const number = nextPhone()
   await seedSuperAdmin({
     ...cfg,
+    adminPhone: '',
     superAdminPhone: number,
+    adminPassword: '',
     superAdminPassword: password,
-    superAdminName: 'Ushindi Super Admin',
+    superAdminName: 'Ushindi Admin',
     superAdminDob: '1990-01-01',
     isProduction: false,
   })
   const client = new Client(app)
   const logged = await client.send('POST', '/api/auth/login', { phone: number, password })
   assert.equal(logged.status, 200)
-  assert.equal(logged.json.user?.role, 'super_admin')
+  assert.equal(logged.json.user?.role, 'admin')
   assert.equal(logged.json.user?.admin, true)
   assert.equal((await client.send('GET', '/api/admin/whoami')).status, 200)
 })

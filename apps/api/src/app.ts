@@ -127,6 +127,13 @@ export async function buildApp(overrides: Partial<AppConfig> = {}): Promise<Fast
   app.addHook('onRequest', async (req) => {
     req.auth = await readAccessSession(cfg, req)
   })
+  app.addHook('preHandler', async (req) => {
+    if (!req.auth?.readOnly) return
+    if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return
+    const path = req.url.split('?')[0]
+    if (path === '/api/auth/impersonation/stop' || path === '/api/auth/logout') return
+    throw new ApiError(403, 'read_only')
+  })
   app.addHook('onClose', async () => {
     if (redis) await redis.quit().catch(() => undefined)
   })

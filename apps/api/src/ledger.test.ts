@@ -9,6 +9,8 @@ process.env.DATABASE_URL = process.env.DATABASE_URL ?? 'postgres://ushindi:local
 process.env.MIGRATIONS_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../db/migrations')
 delete process.env.SUPER_ADMIN_PHONE
 delete process.env.SUPER_ADMIN_PASSWORD
+delete process.env.ADMIN_PHONE
+delete process.env.ADMIN_PASSWORD
 delete process.env.REDIS_URL
 
 const dbName = new URL(process.env.DATABASE_URL).pathname
