@@ -1,6 +1,5 @@
 import { defineStore } from 'pinia'
-import { matches as seed } from '../data/mock'
-import { api, ensureCsrf } from '../api'
+import { ApiClientError, api, ensureCsrf } from '../api'
 
 export type SessionUser = {
   id: string
@@ -29,18 +28,97 @@ export const useWallet = defineStore('wallet', {
 })
 
 export const useSlip = defineStore('slip', {
-  state: () => ({ items: [] as any[], stake: 1000, open: false }),
+  state: () => ({
+    items: [] as { key: string; match: string; sel: string; price: number; matchId: number; oddsId: number; market: string }[],
+    stake: 1000,
+    open: false,
+    minStake: 500,
+    maxStake: 500000,
+    error: '',
+    idempotencyKey: '',
+    placing: false,
+  }),
   getters: {
-    combined: (s: any) => s.items.reduce((a: any, i: any) => a * i.price, 1),
-    payout: (s: any) => s.items.reduce((a: any, i: any) => a * i.price, 1) * s.stake,
+    combined: (s) => (s.items.length ? s.items.reduce((a, i) => a * i.price, 1) : 0),
+    payout: (s) => (s.items.length ? Math.round(s.items.reduce((a, i) => a * i.price, 1) * s.stake) : 0),
   },
   actions: {
-    toggle(m: any, o: any) {
-      const k = m.id + o.sel
-      if (this.items.find((i: any) => i.key === k)) this.items = this.items.filter((i: any) => i.key !== k)
-      else this.items.push({ key: k, match: `${m.home} vs ${m.away}`, sel: o.sel, price: o.price, matchId: m.id })
+    async loadLimits() {
+      try {
+        const data = await api<{ minStake: number; maxStake: number }>('/api/bets/limits')
+        this.minStake = data.minStake
+        this.maxStake = data.maxStake
+        if (this.stake < data.minStake) this.stake = data.minStake
+      } catch {
+        // The form still shows the defaults from settings.
+      }
     },
-    clear() { this.items = [] },
+    setStake(value: number) {
+      this.stake = Number.isFinite(value) ? Math.round(value) : 0
+      this.idempotencyKey = ''
+      this.error = ''
+    },
+    toggle(m: { id: number; home: string; away: string }, o: { sel: string; price: number; oddsId?: number; market?: string }) {
+      if (!o.oddsId) return
+      const key = `${m.id}:${o.oddsId}`
+      this.idempotencyKey = ''
+      this.error = ''
+      if (this.items.find((item) => item.key === key)) {
+        this.items = this.items.filter((item) => item.key !== key)
+        return
+      }
+      this.items = this.items.filter((item) => item.matchId !== m.id)
+      this.items.push({
+        key,
+        match: `${m.home} vs ${m.away}`,
+        sel: o.sel,
+        price: o.price,
+        matchId: m.id,
+        oddsId: o.oddsId,
+        market: o.market ?? '1X2',
+      })
+    },
+    clear() {
+      this.items = []
+      this.idempotencyKey = ''
+      this.error = ''
+    },
+    async place() {
+      const auth = useAuth()
+      this.error = ''
+      if (!this.items.length || this.placing) return false
+      if (!auth.user) {
+        this.error = 'unauthenticated'
+        return false
+      }
+      if (!Number.isInteger(this.stake) || this.stake < this.minStake || this.stake > this.maxStake) {
+        this.error = this.stake < this.minStake ? 'min' : 'max'
+        return false
+      }
+      if (!this.idempotencyKey) this.idempotencyKey = crypto.randomUUID()
+      this.placing = true
+      try {
+        await api('/api/bets', {
+          method: 'POST',
+          json: {
+            idempotencyKey: this.idempotencyKey,
+            stakeTzs: this.stake,
+            legs: this.items.map((item) => ({ oddsId: item.oddsId, price: item.price })),
+          },
+        })
+        this.items = []
+        this.idempotencyKey = ''
+        this.open = false
+        await auth.loadMe()
+        return true
+      } catch (err) {
+        this.error = err instanceof ApiClientError ? err.code : 'error'
+        if (this.error === 'odds_changed') this.idempotencyKey = ''
+        return false
+      } finally {
+        this.placing = false
+      }
+    },
   },
 })
 
@@ -97,19 +175,19 @@ export const useAuth = defineStore('auth', {
 })
 
 export const useMatches = defineStore('matches', {
-  state: () => ({ list: JSON.parse(JSON.stringify(seed)) as any[], selectedSport: 'All', loadedCount: 0 }),
+  state: () => ({ list: [] as any[], selectedSport: 'All', loaded: false }),
   actions: {
     setSport(s: string) { this.selectedSport = s },
-    loadMore() {
-      import('../data/mock').then((m) => { this.list.push(...m.moreMatches(this.loadedCount)); this.loadedCount += 4 })
+    async load() {
+      try {
+        this.list = await api<any[]>('/api/matches')
+        this.loaded = true
+      } catch {
+        this.loaded = true
+      }
     },
     tick() {
-      this.list.forEach((m: any) => {
-        if (m.live) {
-          m.minute = Math.min(90, m.minute + 1)
-          m.odds = m.odds.map((o: any) => ({ ...o, price: Math.max(1.05, +(o.price + (Math.random() - 0.5) * 0.08).toFixed(2)) }))
-        }
-      })
+      // Prices stay on the server quote. A random tick would fail the odds recheck.
     },
   },
 })

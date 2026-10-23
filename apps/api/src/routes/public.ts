@@ -100,14 +100,6 @@ export const sportsList = [
 }))
 
 export function registerPublicRoutes(app: FastifyInstance) {
-  app.get('/api/matches', async (req) => {
-    const query = req.query as { live?: string }
-    return query?.live ? matches.filter((m) => m.live) : matches
-  })
-  app.get('/api/matches/:id', async (req) => {
-    const id = Number((req.params as { id: string }).id)
-    return matches.find((m) => m.id === id) ?? { error: 'not found' }
-  })
   app.get('/api/crash/current', async () => ({ serverSeedHash: currentHash, nonce, rtp: 0.97, publishedRtp: '97%' }))
   app.post('/api/crash/start', async (req) => {
     const body = (req.body ?? {}) as { clientSeed?: string; cashOutAt?: number }

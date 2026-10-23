@@ -1,6 +1,6 @@
 # Ushindi Bet
 
-Tanzanian sportsbook. Accounts and the money ledger use Postgres. Odds, casino, and the deposit button are still sandbox mocks and do not move the ledger.
+Tanzanian sportsbook. Accounts, the money ledger, and sports bets use Postgres. Casino and the deposit button are still sandbox mocks and do not move the ledger.
 
 Swahili is the default language. English and the dark/light theme are unchanged.
 
@@ -23,7 +23,9 @@ The deposit page asks for at least `MIN_DEPOSIT_TZS` (30,000 by default). `POST 
 
 The phone in `ADMIN_PHONE` (or `SUPER_ADMIN_PHONE`) is created as `admin` on startup when the matching password is set. There is one staff role. Older `super_admin`, finance, risk, support, marketing, and compliance rows are migrated to `admin`. Sign in with that phone and open `/admin`. Any player who opens `/admin` sees the admin gate. The API rejects admin calls from anyone who is not an admin.
 
-`/admin` follows the PesaBetPro section list. Overview counts come from the database. Settings, admin accounts, users, the audit log, wallet reconciliation, banners, announcements, and notifications work. Payments, sports, games, SMS, and support stay in the menu as coming soon. An admin can add or remove other admins and cannot remove the last one. Balance changes write the ledger with a reason. Closing an account sets `closed_at` and does not delete the user. Impersonation is a short read-only session and is written to the audit log. The phone in `ADMIN_PHONE` is promoted to admin again on startup, so that account can be recovered.
+`/admin` follows the PesaBetPro section list. Overview counts come from the database. Settings, admin accounts, users, the audit log, wallet reconciliation, banners, announcements, and notifications work. Match API, matches, and bets work too. Payments, games, SMS, and support stay in the menu as coming soon. An admin can add or remove other admins and cannot remove the last one. Balance changes write the ledger with a reason. Closing an account sets `closed_at` and does not delete the user. Impersonation is a short read-only session and is written to the audit log. The phone in `ADMIN_PHONE` is promoted to admin again on startup, so that account can be recovered.
+
+Sports prices are checked again on the server when a bet is placed. The stake goes through `place_bet_atomic`. An admin settles a match by entering the score, or voids it. Either one credits a win or refunds a void through the ledger, once. Doing it again does not move money. PesaBetPro's feed is API-Football (`api-sports.io`, header `x-apisports-key`). Put a key in Match API, or in `API_SPORTS_KEY`. With no key, add matches and odds by hand. Seeded Ligi Kuu, Premier League, and Serie A rows are there so the sports page is not empty.
 
 If you previously started the old demo stack, reset the database volume once:
 
@@ -50,4 +52,4 @@ DATABASE_URL=postgres://ushindi:local_dev_only_change_me_1@127.0.0.1:5432/ushind
 - `.env.example` is a local placeholder. The process will not boot in production while `ADMIN_PASSWORD` or `SUPER_ADMIN_PASSWORD` is still that placeholder. Set `COOKIE_SECURE=true` only behind HTTPS.
 - Admin writes are appended to `audit_log`. The server checks that the caller is an admin on every request. Players cannot open those routes.
 
-Real launch still needs a Gaming Board of Tanzania licence, a payment provider, a licensed odds feed, KYC, and legal review. Those are not in this step.
+Real launch still needs a Gaming Board of Tanzania licence, a payment provider that credits the ledger, a paid API-Football plan if you do not enter fixtures by hand, KYC, and legal review. Deposits and withdrawals are not wired to the ledger in this step.

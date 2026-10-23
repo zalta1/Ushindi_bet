@@ -15,6 +15,7 @@ type SectionId =
 const ready = new Set<SectionId>([
   'overview', 'users', 'banners', 'notifications', 'announcements',
   'wallet-audit', 'audit', 'account', 'admins', 'settings',
+  'match-api', 'matches', 'bets',
 ])
 
 const menu: SectionId[] = [
@@ -59,6 +60,18 @@ const notes = ref<Note[]>([])
 const noteTitle = ref('')
 const noteBody = ref('')
 const notePhone = ref('')
+const apiKeys = ref<ApiKeyRow[]>([])
+const apiLabel = ref('')
+const apiKey = ref('')
+const adminMatches = ref<AdminMatch[]>([])
+const betFilter = ref<'all' | 'open' | 'won' | 'lost'>('all')
+const betStats = ref<BetStats | null>(null)
+const adminBets = ref<AdminBet[]>([])
+const selectedMatch = ref<number | null>(null)
+const matchForm = ref({ home: '', away: '', league: 'Ligi Kuu Tanzania', country: 'Tanzania', kickoff: '', status: 'upcoming', minute: 0, homeOdd: 2.1, drawOdd: 3.2, awayOdd: 2.8 })
+const scoreHome = ref(0)
+const scoreAway = ref(0)
+const voidReason = ref('')
 
 const cfg = ref({
   marginBps: 600,
@@ -94,6 +107,11 @@ type AuditRow = { id: string; actor: string; action: string; created_at: string 
 type Banner = { id: string; title: string; image_url: string; active: boolean; sort_order: number }
 type Announcement = { id: string; message_sw: string; message_en: string; active: boolean }
 type Note = { id: string; phone: string | null; title: string; body: string }
+type ApiKeyRow = { source: 'system' | 'custom'; id: string | null; label: string; masked: string; is_active: boolean; check?: { ok: boolean; message?: string } | null }
+type Outcome = { sel: string; price: number; oddsId: number; market: string; suspended?: boolean }
+type AdminMatch = { id: number; home: string; away: string; league: string; country: string; kickoff: string; status: string; live: boolean; minute: number; hs: number; as: number; markets: Record<string, Outcome[]> }
+type BetStats = { total: number; open: number; won: number; lost: number; totalStakes: number; totalPayouts: number }
+type AdminBet = { id: string; phone: string; stakeTzs: number; combinedOdds: number; potentialPayoutTzs: number; status: string; legs: { match: string; market: string; selection: string; odds: number; status: string }[] }
 
 const allowed = computed(() => Boolean(auth.user?.admin))
 const money = (n: number) => `TSH ${Number(n || 0).toLocaleString(locale.value === 'sw' ? 'sw-TZ' : 'en-TZ')}`
@@ -146,6 +164,128 @@ async function loadSettings() {
   cfg.value = { ...cfg.value, ...remote }
 }
 
+async function loadMatchApi() {
+  const data = await api<{ keys: ApiKeyRow[] }>('/api/admin/match-api')
+  apiKeys.value = data.keys
+}
+
+async function addApiKey() {
+  error.value = ''
+  try {
+    await api('/api/admin/match-api', { method: 'POST', json: { label: apiLabel.value || 'API-Football', apiKey: apiKey.value } })
+    apiLabel.value = ''
+    apiKey.value = ''
+    status.value = 'saved'
+    await loadMatchApi()
+  } catch (err) {
+    fail(err)
+  }
+}
+
+async function toggleApiKey(row: ApiKeyRow) {
+  if (!row.id) return
+  error.value = ''
+  try {
+    await api(`/api/admin/match-api/${row.id}/toggle`, { method: 'POST', json: {} })
+    await loadMatchApi()
+  } catch (err) {
+    fail(err)
+  }
+}
+
+async function deleteApiKey(row: ApiKeyRow) {
+  if (!row.id) return
+  error.value = ''
+  try {
+    await api(`/api/admin/match-api/${row.id}/delete`, { method: 'POST', json: {} })
+    await loadMatchApi()
+  } catch (err) {
+    fail(err)
+  }
+}
+
+async function checkApiKey(row: ApiKeyRow) {
+  if (!row.id) return
+  error.value = ''
+  try {
+    const check = await api<{ ok: boolean; message?: string }>(`/api/admin/match-api/${row.id}/check`, { method: 'POST', json: {} })
+    row.check = check
+  } catch (err) {
+    fail(err)
+  }
+}
+
+async function syncMatches() {
+  error.value = ''
+  try {
+    await api('/api/admin/matches/sync', { method: 'POST', json: {} })
+    status.value = 'saved'
+    await loadAdminMatches()
+  } catch (err) {
+    fail(err)
+  }
+}
+
+async function loadAdminMatches() {
+  adminMatches.value = (await api<{ data: AdminMatch[] }>('/api/admin/matches')).data
+  if (selectedMatch.value == null && adminMatches.value[0]) selectedMatch.value = adminMatches.value[0].id
+}
+
+async function createMatch() {
+  error.value = ''
+  try {
+    await api('/api/admin/matches', {
+      method: 'POST',
+      json: {
+        home: matchForm.value.home,
+        away: matchForm.value.away,
+        league: matchForm.value.league,
+        country: matchForm.value.country,
+        kickoff: matchForm.value.kickoff || new Date(Date.now() + 3_600_000).toISOString(),
+        status: matchForm.value.status,
+        minute: matchForm.value.minute,
+        odds: { home: matchForm.value.homeOdd, draw: matchForm.value.drawOdd, away: matchForm.value.awayOdd },
+      },
+    })
+    matchForm.value.home = ''
+    matchForm.value.away = ''
+    status.value = 'saved'
+    await loadAdminMatches()
+  } catch (err) {
+    fail(err)
+  }
+}
+
+async function settleMatch(id: number) {
+  error.value = ''
+  try {
+    await api(`/api/admin/matches/${id}/settle`, { method: 'POST', json: { homeScore: Number(scoreHome.value), awayScore: Number(scoreAway.value) } })
+    status.value = 'saved'
+    await loadAdminMatches()
+  } catch (err) {
+    fail(err)
+  }
+}
+
+async function voidMatch(id: number) {
+  error.value = ''
+  try {
+    await api(`/api/admin/matches/${id}/void`, { method: 'POST', json: { reason: voidReason.value } })
+    status.value = 'saved'
+    voidReason.value = ''
+    await loadAdminMatches()
+  } catch (err) {
+    fail(err)
+  }
+}
+
+async function loadAdminBets() {
+  const q = betFilter.value === 'all' ? '' : `?status=${betFilter.value}`
+  const data = await api<{ stats: BetStats; data: AdminBet[] }>(`/api/admin/bets${q}`)
+  betStats.value = data.stats
+  adminBets.value = data.data
+}
+
 async function refresh() {
   error.value = ''
   if (!allowed.value) return
@@ -157,6 +297,9 @@ async function refresh() {
     if (section.value === 'wallet-audit') await loadWallet()
     if (section.value === 'banners' || section.value === 'announcements' || section.value === 'notifications') await loadContent()
     if (section.value === 'settings') await loadSettings()
+    if (section.value === 'match-api') await loadMatchApi()
+    if (section.value === 'matches') await loadAdminMatches()
+    if (section.value === 'bets') await loadAdminBets()
   } catch (err) {
     fail(err)
   }
@@ -525,6 +668,97 @@ async function deleteNote(id: string) {
         <span>{{ row.message_sw }}</span>
         <button type="button" @click="toggleAnnouncement(row)">{{ row.active ? 'Hide' : 'Show' }}</button>
         <button type="button" @click="deleteAnnouncement(row.id)">×</button>
+      </div>
+    </section>
+
+    <section v-else-if="section === 'match-api'" data-testid="admin-match-api">
+      <div class="card">
+        <h3>Ongeza API ya Mechi (API-Football)</h3>
+        <input v-model="apiLabel" placeholder="Jina (mf. Akaunti ya 3)" data-testid="match-api-label" />
+        <input v-model="apiKey" placeholder="Bandika API key hapa" data-testid="match-api-key" />
+        <button type="button" @click="addApiKey" data-testid="match-api-add">Ongeza API</button>
+      </div>
+      <div class="admin-row">
+        <h3>API za sasa ({{ apiKeys.length }})</h3>
+        <button type="button" @click="loadMatchApi">Kagua</button>
+      </div>
+      <p v-if="!apiKeys.length" class="muted">Hakuna API bado.</p>
+      <div v-for="row in apiKeys" :key="row.id || row.label" class="card">
+        <b>{{ row.label }}</b>
+        <p class="muted">{{ row.masked }}</p>
+        <p v-if="row.check">{{ row.check.ok ? 'Inafanya kazi' : 'Haifanyi kazi' }} <span v-if="row.check.message && !row.check.ok">— {{ row.check.message }}</span></p>
+        <template v-if="row.source === 'custom' && row.id">
+          <button type="button" @click="checkApiKey(row)">Kagua</button>
+          <button type="button" @click="toggleApiKey(row)">{{ row.is_active ? 'Zima' : 'Washa' }}</button>
+          <button type="button" @click="deleteApiKey(row)">Futa</button>
+        </template>
+        <p v-else class="muted">Ufunguo wa mfumo (umehifadhiwa kwa usalama)</p>
+      </div>
+    </section>
+
+    <section v-else-if="section === 'matches'" data-testid="admin-matches">
+      <div class="card">
+        <h3>Ongeza mechi</h3>
+        <p class="muted">API-Football inaleta mechi ikiwa ufunguo upo. Bila ufunguo, weka mechi hapa.</p>
+        <button type="button" @click="syncMatches" data-testid="matches-sync">Leta mechi kutoka API-Football</button>
+        <label>Nyumbani<input v-model="matchForm.home" data-testid="match-home" /></label>
+        <label>Ugenini<input v-model="matchForm.away" data-testid="match-away" /></label>
+        <label>Ligi<input v-model="matchForm.league" /></label>
+        <label>Nchi<input v-model="matchForm.country" /></label>
+        <label>Muda<input type="datetime-local" v-model="matchForm.kickoff" /></label>
+        <label>Hali
+          <select v-model="matchForm.status">
+            <option value="upcoming">Inayokuja</option>
+            <option value="live">Mubashara</option>
+          </select>
+        </label>
+        <label>Odds 1<input type="number" step="0.01" v-model.number="matchForm.homeOdd" /></label>
+        <label>Odds X<input type="number" step="0.01" v-model.number="matchForm.drawOdd" /></label>
+        <label>Odds 2<input type="number" step="0.01" v-model.number="matchForm.awayOdd" /></label>
+        <button type="button" @click="createMatch" data-testid="match-save">Hifadhi</button>
+      </div>
+      <div v-for="match in adminMatches" :key="match.id" class="card">
+        <button type="button" @click="selectedMatch = match.id"><b>{{ match.home }} vs {{ match.away }}</b></button>
+        <p class="muted">{{ match.league }} · {{ match.country }} · {{ match.status }} <span v-if="match.live">{{ match.minute }}'</span> {{ match.hs }}-{{ match.as }}</p>
+        <div v-if="selectedMatch === match.id">
+          <p v-for="(outcomes, market) in match.markets" :key="market">
+            {{ market }}:
+            <span v-for="outcome in outcomes" :key="outcome.oddsId"> {{ outcome.sel }} {{ outcome.price.toFixed(2) }}</span>
+          </p>
+          <template v-if="match.status === 'upcoming' || match.status === 'live'">
+            <label>Goli Nyumbani<input type="number" v-model.number="scoreHome" data-testid="score-home" /></label>
+            <label>Goli Ugenini<input type="number" v-model.number="scoreAway" data-testid="score-away" /></label>
+            <button type="button" @click="settleMatch(match.id)" data-testid="match-settle">Maliza mechi</button>
+            <label>Sababu<input v-model="voidReason" data-testid="void-reason" /></label>
+            <button type="button" @click="voidMatch(match.id)" data-testid="match-void">Futa mechi</button>
+          </template>
+        </div>
+      </div>
+    </section>
+
+    <section v-else-if="section === 'bets'" data-testid="admin-bets">
+      <div class="admin-stats" v-if="betStats">
+        <article><b>{{ betStats.total }}</b><span>Bets Zote</span></article>
+        <article><b>{{ betStats.open }}</b><span>Open</span></article>
+        <article><b>{{ betStats.won }}</b><span>Won</span></article>
+        <article><b>{{ betStats.lost }}</b><span>Lost</span></article>
+      </div>
+      <div class="admin-stats" v-if="betStats">
+        <article><b>{{ money(betStats.totalStakes) }}</b><span>Total Stakes</span></article>
+        <article><b>{{ money(betStats.totalPayouts) }}</b><span>Total Payouts</span></article>
+      </div>
+      <div class="chips">
+        <span>Filter:</span>
+        <button type="button" :class="{ active: betFilter === 'all' }" @click="betFilter = 'all'; loadAdminBets()">Zote</button>
+        <button type="button" :class="{ active: betFilter === 'open' }" @click="betFilter = 'open'; loadAdminBets()">OPEN</button>
+        <button type="button" :class="{ active: betFilter === 'won' }" @click="betFilter = 'won'; loadAdminBets()">WON</button>
+        <button type="button" :class="{ active: betFilter === 'lost' }" @click="betFilter = 'lost'; loadAdminBets()">LOST</button>
+      </div>
+      <p v-if="!adminBets.length" class="muted">{{ $t('adminNoRows') }}</p>
+      <div v-for="bet in adminBets" :key="bet.id" class="card" data-testid="admin-bet-row">
+        <b>{{ bet.phone }}</b> · {{ bet.status.toUpperCase() }}
+        <p>Stake {{ money(bet.stakeTzs) }} @ {{ bet.combinedOdds.toFixed(2) }} → {{ money(bet.potentialPayoutTzs) }}</p>
+        <p v-for="(leg, i) in bet.legs" :key="i" class="muted">{{ leg.match }} · {{ leg.market }} {{ leg.selection }} @ {{ leg.odds.toFixed(2) }} · {{ leg.status }}</p>
       </div>
     </section>
 

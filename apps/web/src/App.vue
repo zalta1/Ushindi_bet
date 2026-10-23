@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import Betslip from './components/Betslip.vue'
 import { useWallet, useSlip, useMatches, useAuth } from './stores/store'
@@ -26,6 +26,7 @@ function closeMobile() { mobileOpen.value = false }
 watch(() => route.path, closeMobile)
 
 const isAdminRoute = computed(() => route.path.startsWith('/admin'))
+onMounted(() => { void ms.load(); void slip.loadLimits() })
 function confirmAge() { localStorage.setItem('age18', '1'); age.value = false }
 async function onLogout() { await auth.logout(); router.push('/') }
 async function stopImpersonation() {
