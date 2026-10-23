@@ -35,6 +35,7 @@ function schemaFields(issues: SchemaIssue[]) {
 import { warmPasswordHasher } from './passwords.js'
 import { registerDepositRoutes } from './deposits/routes.js'
 import { registerPublicRoutes } from './routes/public.js'
+import { registerSportsRoutes } from './sports/routes.js'
 
 function waitUntilReady(redis: Redis, timeoutMs: number): Promise<void> {
   if (redis.status === 'ready') return Promise.resolve()
@@ -169,6 +170,7 @@ export async function buildApp(overrides: Partial<AppConfig> = {}): Promise<Fast
   })
 
   registerPublicRoutes(app)
+  registerSportsRoutes(app, cfg)
   registerAuthRoutes(app, cfg)
   registerDepositRoutes(app, cfg)
   registerAdminRoutes(app, cfg)

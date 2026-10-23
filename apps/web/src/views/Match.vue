@@ -1,4 +1,72 @@
 <script setup lang="ts">
-import {useRoute} from 'vue-router';import {ref} from 'vue';import {useMatches,useSlip} from '../stores/store';const id=+useRoute().params.id;const m:any=useMatches().list.find((x:any)=>x.id===id);const slip=useSlip();const tab=ref('Main');const markets:any={Main:m?.odds,Goals:[{sel:'Over 2.5',price:1.9},{sel:'Under 2.5',price:1.85}],BTTS:[{sel:'Yes',price:1.8},{sel:'No',price:1.95}],Halftime:[{sel:'1 HT',price:3.1},{sel:'X HT',price:2.0},{sel:'2 HT',price:3.4}]};
+import { onMounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
+import { api } from '../api'
+import { fmtTime } from '../data/mock'
+import { useSlip } from '../stores/store'
+
+type Outcome = { sel: string; price: number; oddsId: number; market: string; suspended?: boolean }
+type MatchRow = {
+  id: number
+  home: string
+  away: string
+  league: string
+  country: string
+  kickoff: string
+  live: boolean
+  minute: number
+  hs: number
+  as: number
+  status: string
+  markets: Record<string, Outcome[]>
+}
+
+const route = useRoute()
+const slip = useSlip()
+const match = ref<MatchRow | null>(null)
+const missing = ref(false)
+const tab = ref('1X2')
+const labels: Record<string, string> = {
+  '1X2': '1X2 | Full Time',
+  BTTS: 'Both Teams To Score | Full Time',
+  'Over/Under': 'Over/Under | Full Time',
+  'Double Chance': 'Double Chance | Full Time',
+}
+
+async function load() {
+  missing.value = false
+  match.value = null
+  try {
+    match.value = await api<MatchRow>(`/api/matches/${route.params.id}`)
+    const keys = Object.keys(match.value.markets || {})
+    if (!keys.includes(tab.value)) tab.value = keys[0] || '1X2'
+  } catch {
+    missing.value = true
+  }
+}
+
+onMounted(load)
+watch(() => route.params.id, load)
 </script>
-<template><div v-if="m"><h2>{{m.home}} vs {{m.away}}</h2><p>{{m.league}} · {{m.kickoff}}</p><div><button v-for="t in Object.keys(markets)" @click="tab=t">{{t}}</button></div><div class="odds"><button v-for="o in markets[tab]" @click="slip.toggle(m,o)">{{o.sel}}<b>{{o.price.toFixed(2)}}</b></button></div></div></template>
+<template>
+  <p v-if="missing">{{ $t('noMatches') }}</p>
+  <div v-else-if="match" data-testid="match-page">
+    <h2>{{ match.home }} vs {{ match.away }}</h2>
+    <p>{{ match.league }} · {{ match.country }} · {{ fmtTime(match.kickoff) }}
+      <span v-if="match.live" class="live">LIVE {{ match.minute }}' {{ match.hs }}-{{ match.as }}</span>
+      <span v-else-if="match.status === 'finished' || match.status === 'void'">{{ match.hs }}-{{ match.as }} · {{ match.status }}</span>
+    </p>
+    <div class="chips">
+      <button v-for="name in Object.keys(match.markets)" :key="name" type="button" :class="{ active: tab === name }" @click="tab = name">{{ labels[name] || name }}</button>
+    </div>
+    <div class="odds">
+      <button
+        v-for="outcome in match.markets[tab] || []"
+        :key="outcome.oddsId"
+        type="button"
+        :disabled="outcome.suspended || match.status === 'finished' || match.status === 'void'"
+        @click="slip.toggle(match, outcome)"
+      >{{ outcome.sel }}<b>{{ outcome.price.toFixed(2) }}</b></button>
+    </div>
+  </div>
+</template>

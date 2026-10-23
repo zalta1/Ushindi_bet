@@ -62,7 +62,7 @@ beforeEach(async () => {
     maintenanceMode: false,
   })
   await pool.query(`DELETE FROM settings`)
-  await pool.query(`TRUNCATE auth_events, audit_log, bet_legs, bets, ledger_entries, sessions, deposit_requests, wallets, users RESTART IDENTITY CASCADE`)
+  await pool.query(`TRUNCATE banners, announcements, notifications, auth_events, audit_log, bet_legs, bets, ledger_entries, sessions, deposit_requests, wallets, users RESTART IDENTITY CASCADE`)
 })
 
 after(async () => {
@@ -107,7 +107,8 @@ test('overview counts are real and settings survive a reload', async () => {
   assert.equal(overview.json.users, 2)
   assert.equal(overview.json.betsToday, 0)
   assert.equal(overview.json.revenueTzs, 0)
-  assert.equal(overview.json.activeMatches, 0)
+  const live = await pool.query<{ n: number }>(`SELECT count(*)::int AS n FROM matches WHERE status IN ('live', 'inplay')`)
+  assert.equal(overview.json.activeMatches, live.rows[0].n)
   assert.equal(overview.json.newest.length, 2)
 
   const saved = await admin.client.send('PATCH', '/api/admin/config', { minDeposit: 45000, withdrawalsEnabled: false })
