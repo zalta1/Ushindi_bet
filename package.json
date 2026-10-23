@@ -1,0 +1,1 @@
+{"name":"ushindi-bet","private":true,"workspaces":["apps/*"],"scripts":{"dev":"npm run dev -w @ushindi/web","dev:web":"npm run dev -w @ushindi/web","dev:api":"npm run dev -w @ushindi/api","build":"npm run build -w @ushindi/api && npm run build -w @ushindi/web"},"engines":{"node":">=18"}}

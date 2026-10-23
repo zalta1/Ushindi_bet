@@ -1,0 +1,4 @@
+<script setup lang="ts">
+import {useRoute} from 'vue-router';import {ref} from 'vue';import {useMatches,useSlip} from '../stores/store';const id=+useRoute().params.id;const m:any=useMatches().list.find((x:any)=>x.id===id);const slip=useSlip();const tab=ref('Main');const markets:any={Main:m?.odds,Goals:[{sel:'Over 2.5',price:1.9},{sel:'Under 2.5',price:1.85}],BTTS:[{sel:'Yes',price:1.8},{sel:'No',price:1.95}],Halftime:[{sel:'1 HT',price:3.1},{sel:'X HT',price:2.0},{sel:'2 HT',price:3.4}]};
+</script>
+<template><div v-if="m"><h2>{{m.home}} vs {{m.away}}</h2><p>{{m.league}} · {{m.kickoff}}</p><div><button v-for="t in Object.keys(markets)" @click="tab=t">{{t}}</button></div><div class="odds"><button v-for="o in markets[tab]" @click="slip.toggle(m,o)">{{o.sel}}<b>{{o.price.toFixed(2)}}</b></button></div></div></template>

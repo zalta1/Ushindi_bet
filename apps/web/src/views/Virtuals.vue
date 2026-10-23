@@ -1,0 +1,1 @@
+<template><h2>Virtuals</h2><div class="grid"><div class="tile" v-for="g in ['Virtual Football','Virtual Racing','Virtual Tennis','Lucky Numbers']">{{g}}<br/><button>Play (mock)</button></div></div></template>

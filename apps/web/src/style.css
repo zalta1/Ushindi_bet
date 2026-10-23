@@ -1,0 +1,79 @@
+:root{--bg:#06080d;--card:#0e1a30;--text:#f2f5fa;--muted:#9fb0c8;--gold:#f5c518;--green:#13336b;--accent:#19c37d}
+:root.light{--bg:#f4f6f5;--card:#fff;--text:#10201a;--muted:#5a6d66}
+*{box-sizing:border-box}body{margin:0;font-family:system-ui;background:var(--bg);color:var(--text)}a{color:inherit;text-decoration:none}
+header{position:sticky;top:0;background:var(--green);padding:10px 16px;display:flex;gap:12px;align-items:center;z-index:5;flex-wrap:wrap}.logo{font-weight:900;color:var(--gold);font-size:22px}
+.layout{display:grid;grid-template-columns:240px 1fr 320px;gap:0;width:100%;max-width:none;margin:0;padding:0;align-items:start}
+main{min-width:0;padding:14px}.slip-d{min-width:0;padding:14px 14px 14px 0}
+.card,.match{background:var(--card);border-radius:12px;padding:14px;margin:10px 0}.odds{display:flex;gap:8px;margin-top:8px}.odds button,.chips button,button{background:#172a4d;color:var(--text);border:1px solid #243f6b;border-radius:8px;padding:8px 12px;cursor:pointer}:root.light button{background:#e8efec;color:#10201a}
+.odds button b{display:block;color:var(--gold)}input,select{padding:10px;border-radius:8px;width:100%;margin:6px 0}.live{color:#ff5a5a;font-weight:700}.gold{color:var(--gold)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}.tile{background:var(--card);padding:20px;border-radius:12px;text-align:center}
+.bottombar{display:none} .slip{background:var(--card);padding:14px;border-radius:12px;position:sticky;top:70px}
+@media(max-width:900px){.layout{grid-template-columns:1fr}.rail-d,.slip-d{display:none}.bottombar{display:flex;position:fixed;bottom:0;left:0;right:0;background:var(--green);justify-content:space-around;padding:10px;z-index:9}.slip.open{display:block;position:fixed;inset:0;z-index:20;overflow:auto}}
+.age{position:fixed;inset:0;background:#000c;display:grid;place-items:center;z-index:50}.age>div{background:var(--card);padding:24px;border-radius:16px;max-width:420px}
+
+.badge{background:#e33;color:#fff;border-radius:999px;padding:1px 7px;font-size:12px}.count{float:right;color:var(--gold)}.sportbtn{display:block;width:100%;text-align:left;margin:3px 0}.sportbtn.active{outline:2px solid var(--gold)}.topnav{display:flex;gap:10px;flex-wrap:wrap}.hero{display:flex;gap:12px;align-items:center;background:linear-gradient(135deg,var(--green),#0c1f42);border-radius:14px;padding:18px;margin:10px 0}.hero h2{color:var(--gold);margin:4px 0}.chips{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.chips .active,button.active{outline:2px solid var(--gold)}.fixtures{width:100%;border-collapse:collapse}.fixtures td,.fixtures th{border:1px solid #243f6b;padding:6px}.seo{max-width:900px;margin:0 auto 10px;color:var(--muted);font-size:13px;line-height:1.5}@media print{header,.bottombar,.rail-d,.slip-d,footer,button{display:none!important}.layout{grid-template-columns:1fr}}
+
+/* --- Retractable left panel (menu + sports) --- */
+.header-spacer{flex:1}.deposit-btn{background:var(--gold);color:#10201a;font-weight:800;padding:8px 12px;border-radius:8px}.panel-toggle{font-size:18px;line-height:1;padding:8px 11px}
+.layout{grid-template-columns:240px 1fr 320px;transition:grid-template-columns .28s ease}
+.layout.collapsed{grid-template-columns:0 1fr 320px}
+.leftpanel{position:sticky;top:70px;left:0;width:240px;max-height:calc(100vh - 84px);overflow-y:auto;overflow-x:hidden;margin:0;padding:12px;background:var(--card);border:0;border-right:1px solid #243f6b;border-radius:0;box-shadow:none;transition:transform .28s ease,visibility .28s ease}
+.panel-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}.panel-title{font-weight:800}.panel-chevron{padding:6px 10px}
+.mainmenu{display:flex;flex-direction:column}
+.menuitem{display:flex;align-items:center;gap:10px;width:100%;text-align:left;margin:2px 0;padding:9px 10px;border-radius:8px;position:relative;background:transparent;border:1px solid transparent;color:var(--text);cursor:pointer}
+a.menuitem:hover,.sportbtn.menuitem:hover{background:#172a4d}:root.light a.menuitem:hover,:root.light .sportbtn.menuitem:hover{background:#e8efec}
+.mainmenu a.router-link-exact-active{background:#172a4d;outline:2px solid var(--gold)}:root.light .mainmenu a.router-link-exact-active{background:#e8efec}
+.lp-icon{flex:0 0 24px;width:24px;text-align:center;font-size:17px}.lp-label{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.lp-badge{margin-left:auto}.lp-count{margin-left:auto;float:none}
+.lp-divider{border:none;border-top:1px solid #243f6b;margin:12px 0}.lp-section{display:flex;align-items:center;gap:10px;margin:6px 0 8px;padding:0 10px;font-size:15px}
+.admin-link{opacity:.85}
+/* Collapsed (desktop): panel retracts fully off the left edge — no icon rail, no blank column.
+   The header hamburger (☰) is the way to bring it back. */
+.leftpanel.collapsed{transform:translateX(-100%);visibility:hidden;pointer-events:none}
+.panel-backdrop{display:none}
+@media(max-width:900px){
+  .layout,.layout.collapsed{grid-template-columns:1fr}
+  /* Mobile: panel hidden by default, slides in as overlay drawer regardless of desktop collapsed state */
+  .leftpanel,.leftpanel.collapsed{position:fixed;top:0;left:0;bottom:0;width:min(280px,85vw);max-height:none;height:100dvh;margin:0;border:0;border-radius:0;z-index:40;transform:translateX(-110%);visibility:visible;pointer-events:none;padding:14px}
+  .leftpanel.open{transform:translateX(0);box-shadow:8px 0 24px #0008;visibility:visible;pointer-events:auto}
+  main{padding:10px}.slip-d{padding:0}
+  .panel-backdrop{display:block;position:fixed;inset:0;background:#000a;z-index:39}
+  .header-balance{font-size:13px}
+}
+@media print{.leftpanel,.panel-toggle,.panel-backdrop{display:none!important}}
+
+/* --- Live Betting hero background video (does not change hero canvas/size) --- */
+/* Existing .hero rule above is untouched: same padding, margin, border-radius, no height/min-height added. */
+.hero{position:relative;overflow:hidden}
+.hero-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0;pointer-events:none}
+.hero-overlay{position:absolute;inset:0;background:linear-gradient(135deg,rgba(8,16,34,.88),rgba(19,51,107,.55) 55%,rgba(0,0,0,.38));z-index:1;pointer-events:none}
+.hero-ui{position:relative;z-index:2}
+@media (prefers-reduced-motion: reduce){.hero-video,.hero-overlay{display:none!important}}
+
+.hero-side-img{position:absolute;top:8px;bottom:8px;right:48px;height:calc(100% - 16px);aspect-ratio:16/9;width:auto;max-width:45%;object-fit:contain;border-radius:10px;z-index:2;box-shadow:0 4px 14px rgba(0,0,0,.45)}
+.hero-text-live{flex:1;margin-right:calc(45% + 10px)}
+@media (max-width:640px){.hero-side-img{max-width:40%}.hero-text-live{margin-right:calc(40% + 6px)}}
+
+/* Landing hero video (replaces rotating banners) */
+.landing-hero{position:relative;overflow:hidden;border-radius:14px;margin:10px 0;aspect-ratio:16/9;max-height:460px;width:100%;display:flex;align-items:flex-end;background:#05070c}
+.landing-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0;pointer-events:none}
+.landing-overlay{position:absolute;inset:0;background:linear-gradient(0deg,rgba(0,0,0,.78) 0%,rgba(0,0,0,.25) 55%,rgba(0,0,0,.05) 100%);z-index:1;pointer-events:none}
+.landing-text{position:relative;z-index:2;padding:22px 24px;max-width:620px}
+.landing-text h1{color:var(--gold);margin:0 0 6px;font-size:clamp(22px,3.2vw,38px)}
+.landing-text p{color:#fff;margin:0 0 12px;font-size:clamp(13px,1.4vw,16px)}
+.landing-cta{display:inline-block;background:var(--gold);color:#111;font-weight:700;padding:9px 18px;border-radius:999px;text-decoration:none}
+@media (max-width:760px){.landing-hero{aspect-ratio:auto;height:62vh;min-height:340px;max-height:none;border-radius:12px;margin:0 0 10px}.landing-text{padding:16px}}
+@media (prefers-reduced-motion: reduce){.landing-video{display:none}.landing-hero{background:#05070c url(/videos/landing-poster.jpg) center/cover}}
+
+.landing-players{position:absolute;inset:0;z-index:3;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .8s ease;padding:22px}
+.landing-players img{width:100%;height:100%;object-fit:contain;display:block}
+.landing-hero.ended .landing-players{opacity:1}
+.landing-hero.ended .landing-video,.landing-hero.ended .landing-overlay,.landing-hero.ended .landing-text{opacity:0;visibility:hidden;transition:opacity .8s ease,visibility 0s .8s}
+.landing-hero{background:radial-gradient(ellipse at center,#0f2550 0%,#05070c 75%)}
+/* Players image: smooth zoom in/out after video ends */
+@keyframes players-breathe{0%{transform:scale(.94)}100%{transform:scale(1.04)}}
+.landing-players img{transform-origin:center;will-change:transform}
+.landing-hero.ended .landing-players img{animation:players-breathe 6s ease-in-out 0.8s infinite alternate}
+@media (prefers-reduced-motion: reduce){.landing-hero.ended .landing-players img{animation:none}}
+/* Stadium background behind players (after video ends) */
+.landing-hero.ended{background:#05070c url(/videos/players-bg.jpg) center/cover no-repeat}
+.landing-hero.ended::before{content:"";position:absolute;inset:0;background:radial-gradient(ellipse at center,rgba(0,0,0,.05) 30%,rgba(0,0,0,.45) 100%);z-index:2;pointer-events:none}

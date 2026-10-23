@@ -1,0 +1,4 @@
+<script setup lang="ts">
+import {ref} from 'vue';import {useWallet} from '../stores/store';const w=useWallet();const limit=ref(w.dailyLimit); const cooldown=()=>window.alert('Cooldown 24h activated (mock)'); const exclude=()=>{w.selfExcluded=true; window.alert('Self-excluded 6 months (mock)')};
+</script>
+<template><h2>Responsible Gambling / Kubeti kwa Uwajibikaji</h2><div class="card"><p>18+ only. Set deposit limits, take a cooldown, or self-exclude.</p><label>Daily deposit limit (TZS)</label><input type="number" v-model.number="limit"/><button @click="w.dailyLimit=limit">Save Limit</button> <button @click="cooldown()">Cooldown 24h</button> <button @click="exclude()">Self-Exclude 6 months</button><p>Help: Gaming Board of Tanzania — seek local support if gambling stops being fun.</p></div></template>

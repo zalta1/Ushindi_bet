@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 520" width="1600" height="300" preserveAspectRatio="xMaxYMid meet">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#04120d"/><stop offset=".6" stop-color="#0b3d2e"/><stop offset="1" stop-color="#14532d"/></linearGradient>
+    <linearGradient id="area" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f5c518" stop-opacity=".45"/><stop offset="1" stop-color="#f5c518" stop-opacity="0"/></linearGradient>
+    <style>
+      .curve{stroke-dasharray:1100;stroke-dashoffset:1100;animation:draw 5s ease-in infinite}
+      .fill{opacity:0;animation:show 5s ease-in infinite}
+      .rocket{offset-path:path("M800 470 C 1050 465, 1250 400, 1500 90");offset-rotate:auto;animation:fly 5s ease-in infinite}
+      .star{animation:tw 2.6s ease-in-out infinite}
+      @keyframes draw{0%{stroke-dashoffset:1100}85%,100%{stroke-dashoffset:0}}
+      @keyframes show{0%{opacity:0}85%,100%{opacity:1}}
+      @keyframes fly{0%{offset-distance:0%}85%,100%{offset-distance:100%}}
+      @keyframes tw{0%,100%{opacity:.25}50%{opacity:1}}
+      @media (prefers-reduced-motion:reduce){.curve{animation:none;stroke-dashoffset:0}.fill{animation:none;opacity:1}.rocket{animation:none;offset-distance:100%}.star{animation:none}}
+    </style>
+  </defs>
+  <rect x="-2400" width="4000" height="520" fill="url(#bg)"/>
+  <!-- stars -->
+  <g fill="#fff">
+    <circle class="star" cx="900" cy="70" r="2"/><circle class="star" cx="1030" cy="140" r="1.6" style="animation-delay:.6s"/><circle class="star" cx="1210" cy="50" r="2.2" style="animation-delay:1.2s"/>
+    <circle class="star" cx="1380" cy="210" r="1.6" style="animation-delay:.3s"/><circle class="star" cx="1540" cy="40" r="2" style="animation-delay:.9s"/><circle class="star" cx="1120" cy="250" r="1.4" style="animation-delay:1.6s"/>
+  </g>
+  <!-- grid -->
+  <g stroke="#19c37d" stroke-opacity=".14" stroke-width="1.5">
+    <line x1="800" y1="470" x2="1560" y2="470"/><line x1="800" y1="370" x2="1560" y2="370"/><line x1="800" y1="270" x2="1560" y2="270"/><line x1="800" y1="170" x2="1560" y2="170"/><line x1="800" y1="70" x2="1560" y2="70"/>
+    <line x1="800" y1="40" x2="800" y2="470"/>
+  </g>
+  <g font-family="system-ui,Segoe UI,sans-serif" font-size="16" fill="#9db8ad"><text x="770" y="475" text-anchor="end">1x</text><text x="770" y="375" text-anchor="end">2x</text><text x="770" y="275" text-anchor="end">5x</text><text x="770" y="175" text-anchor="end">10x</text></g>
+  <path class="fill" d="M800 470 C 1050 465, 1250 400, 1500 90 L1500 470 Z" fill="url(#area)"/>
+  <path class="curve" d="M800 470 C 1050 465, 1250 400, 1500 90" fill="none" stroke="#f5c518" stroke-width="7" stroke-linecap="round"/>
+  <!-- rocket -->
+  <g class="rocket">
+    <g transform="rotate(90)">
+      <path d="M0 -34 C 14 -20, 16 4, 10 22 L-10 22 C -16 4, -14 -20, 0 -34Z" fill="#f2f7f4"/>
+      <circle cy="-6" r="6" fill="#19c37d"/>
+      <path d="M-10 10 L-22 26 L-10 22Z M10 10 L22 26 L10 22Z" fill="#f5c518"/>
+      <path d="M-6 24 L0 44 L6 24Z" fill="#ff8a3d"/>
+    </g>
+  </g>
+  <!-- multiplier -->
+  <text x="1180" y="150" text-anchor="middle" font-family="system-ui,Segoe UI,sans-serif" font-size="92" font-weight="900" fill="#f5c518" fill-opacity=".95">2.45x</text>
+  <!-- fairness chip -->
+  <g transform="translate(1180 210)">
+    <rect x="-150" y="-22" width="300" height="44" rx="22" fill="#071512" stroke="#19c37d" stroke-width="2"/>
+    <text x="0" y="7" text-anchor="middle" font-family="ui-monospace,Consolas,monospace" font-size="17" fill="#19c37d">sha256 b2f5…711c ✓ RTP 97%</text>
+  </g>
+</svg>

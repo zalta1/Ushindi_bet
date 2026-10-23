@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 520" width="1600" height="300" preserveAspectRatio="xMaxYMid meet">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#062a20"/><stop offset="1" stop-color="#0d4a35"/></linearGradient>
+    <radialGradient id="glow" cx="0.75" cy="0.5" r="0.4"><stop offset="0" stop-color="#19c37d" stop-opacity=".35"/><stop offset="1" stop-color="#19c37d" stop-opacity="0"/></radialGradient>
+    <linearGradient id="btn" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffd84a"/><stop offset="1" stop-color="#e0aa00"/></linearGradient>
+    <style>
+      .ring{animation:p 2.2s ease-out infinite;transform-origin:1190px 330px}
+      .hand{animation:s 6s linear infinite;transform-origin:1190px 200px}
+      .up{animation:u 3s ease-in-out infinite}
+      @keyframes p{0%{transform:scale(.9);opacity:.8}100%{transform:scale(1.35);opacity:0}}
+      @keyframes s{to{transform:rotate(360deg)}}
+      @keyframes u{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+      @media (prefers-reduced-motion:reduce){.ring,.hand,.up{animation:none}}
+    </style>
+  </defs>
+  <rect x="-2400" width="4000" height="520" fill="url(#bg)"/>
+  <rect width="1600" height="520" fill="url(#glow)"/>
+  <!-- pitch lines -->
+  <g stroke="#ffffff" stroke-opacity=".08" stroke-width="4" fill="none">
+    <rect x="760" y="40" width="800" height="440"/><line x1="1160" y1="40" x2="1160" y2="480"/><circle cx="1160" cy="260" r="80"/>
+    <rect x="760" y="150" width="110" height="220"/><rect x="1450" y="150" width="110" height="220"/>
+  </g>
+  <!-- phone -->
+  <g transform="translate(1050 30)">
+    <rect width="280" height="460" rx="36" fill="#020806" stroke="#2a5a48" stroke-width="6"/>
+    <rect x="18" y="22" width="244" height="416" rx="22" fill="#0f2a22"/>
+    <text x="140" y="70" text-anchor="middle" font-family="system-ui,Segoe UI,sans-serif" font-size="18" font-weight="800" fill="#f5c518">USHINDI BET</text>
+    <text x="40" y="112" font-family="system-ui,Segoe UI,sans-serif" font-size="15" fill="#9db8ad">Simba SC vs Yanga SC</text>
+    <text x="40" y="136" font-family="system-ui,Segoe UI,sans-serif" font-size="15" font-weight="700" fill="#ff5a5a">LIVE 78'  2-1</text>
+    <!-- stopwatch -->
+    <circle cx="140" cy="200" r="46" fill="none" stroke="#9db8ad" stroke-width="5"/>
+    <rect x="132" y="146" width="16" height="10" rx="2" fill="#9db8ad"/>
+    <line class="hand" x1="140" y1="200" x2="140" y2="166" stroke="#f5c518" stroke-width="5" stroke-linecap="round" transform="translate(-1050 -30) translate(1050 30)"/>
+    <circle cx="140" cy="200" r="5" fill="#f5c518"/>
+    <text x="140" y="276" text-anchor="middle" font-family="system-ui,Segoe UI,sans-serif" font-size="14" fill="#9db8ad">Cash out value</text>
+    <text class="up" x="140" y="312" text-anchor="middle" font-family="system-ui,Segoe UI,sans-serif" font-size="30" font-weight="900" fill="#f2f7f4">TZS 18,450</text>
+    <!-- button -->
+    <rect x="40" y="350" width="200" height="56" rx="14" fill="url(#btn)"/>
+    <text x="140" y="386" text-anchor="middle" font-family="system-ui,Segoe UI,sans-serif" font-size="20" font-weight="900" fill="#10201a">CASH OUT</text>
+  </g>
+  <!-- pulse around button -->
+  <rect class="ring" x="1090" y="380" width="200" height="56" rx="14" fill="none" stroke="#f5c518" stroke-width="3"/>
+</svg>

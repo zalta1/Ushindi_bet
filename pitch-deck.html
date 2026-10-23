@@ -1,0 +1,431 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Ushindi Bet — Pitch Deck</title>
+<style>
+  :root{--bg:#071512;--card:#0f2a22;--card2:#13342a;--text:#f2f7f4;--muted:#9db8ad;--gold:#f5c518;--green:#0b3d2e;--accent:#19c37d;--line:#2a5a48;--live:#ff5a5a}
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;background:#020806;color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow:hidden}
+  .viewport{position:fixed;inset:0;display:grid;place-items:center}
+  .stage{width:1280px;height:720px;position:relative;transform-origin:center center}
+  .slide{position:absolute;inset:0;padding:64px 80px;background:radial-gradient(1200px 600px at 100% 0%,#0f3a2c 0%,var(--bg) 60%);border-radius:6px;overflow:hidden;opacity:0;visibility:hidden;transform:translateX(40px);transition:opacity .45s ease,transform .45s ease,visibility .45s}
+  .slide.active{opacity:1;visibility:visible;transform:none}
+  .slide.prev{transform:translateX(-40px)}
+  .slide::after{content:"";position:absolute;left:0;right:0;bottom:0;height:6px;background:linear-gradient(90deg,var(--gold),var(--accent))}
+  .brand{position:absolute;top:28px;right:40px;font-weight:900;letter-spacing:.08em;color:var(--gold);font-size:14px;opacity:.85}
+  .num{position:absolute;bottom:22px;right:40px;color:var(--muted);font-size:13px}
+  .kicker{color:var(--accent);font-weight:700;letter-spacing:.14em;text-transform:uppercase;font-size:15px;margin-bottom:14px}
+  h1{font-size:84px;line-height:1;font-weight:900;letter-spacing:-.02em}
+  h2{font-size:48px;line-height:1.08;font-weight:850;letter-spacing:-.01em;margin-bottom:30px;max-width:1000px}
+  h3{font-size:22px;margin-bottom:8px}
+  p,li{font-size:21px;line-height:1.5;color:#d6e6df}
+  .muted{color:var(--muted)}
+  .gold{color:var(--gold)}
+  .sw{display:block;font-size:17px;color:var(--muted);font-style:italic;margin-top:4px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+  .grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:18px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:22px 24px}
+  .card p{font-size:18px}
+  .card .icon{font-size:30px;margin-bottom:10px;display:block}
+  .stat{font-size:52px;font-weight:900;color:var(--gold);line-height:1}
+  .stat-label{font-size:16px;color:var(--muted);margin-top:8px}
+  ul.clean{list-style:none}
+  ul.clean li{padding-left:34px;position:relative;margin:10px 0}
+  ul.clean li::before{content:"";position:absolute;left:4px;top:13px;width:14px;height:14px;border-radius:4px;background:var(--gold)}
+  .pill{display:inline-block;padding:6px 14px;border-radius:999px;background:var(--card2);border:1px solid var(--line);font-size:15px;margin:4px 6px 4px 0;color:var(--text)}
+  .pill.gold{background:var(--gold);color:#10201a;border-color:var(--gold);font-weight:700}
+  code,.mono{font-family:ui-monospace,Consolas,monospace}
+
+  /* title */
+  .title-slide{display:flex;flex-direction:column;justify-content:center;background:radial-gradient(900px 500px at 85% 20%,#14532d 0%,transparent 70%),radial-gradient(700px 500px at 0% 100%,#0b3d2e 0%,var(--bg) 70%)}
+  .wordmark{display:flex;align-items:center;gap:22px;margin-bottom:28px}
+  .shield{width:86px;height:96px}
+  .title-slide h1 span{color:var(--gold)}
+  .tagline{font-size:30px;color:#d6e6df;margin-top:22px;max-width:820px}
+  .disclaimer{position:absolute;left:80px;bottom:40px;font-size:14px;color:var(--muted)}
+
+  /* product mock */
+  .mock{display:grid;grid-template-columns:170px 1fr 230px;gap:0;background:#06120f;border:1px solid var(--line);border-radius:14px;overflow:hidden;height:440px;font-size:13px}
+  .mock-head{grid-column:1/-1;background:var(--green);display:flex;align-items:center;gap:12px;padding:9px 14px}
+  .mock-head .logo{font-weight:900;color:var(--gold);font-size:15px}
+  .mock-head .sp{flex:1}
+  .mock-head .dep{background:var(--gold);color:#10201a;font-weight:800;padding:4px 10px;border-radius:6px}
+  .mock-rail{background:var(--card);border-right:1px solid var(--line);padding:10px}
+  .mock-rail div{display:flex;justify-content:space-between;padding:5px 6px;border-radius:6px;color:#d6e6df}
+  .mock-rail div b{color:var(--gold);font-weight:600}
+  .mock-rail .on{outline:1.5px solid var(--gold);background:#1a3d31}
+  .mock-main{padding:12px;overflow:hidden}
+  .mock-hero{background:linear-gradient(135deg,var(--green),#14532d);border-radius:10px;padding:12px 14px;margin-bottom:10px}
+  .mock-hero b{color:var(--gold);font-size:16px;display:block}
+  .mock-league{color:var(--muted);font-weight:700;margin:8px 0 4px;font-size:12px}
+  .mock-match{background:var(--card);border-radius:8px;padding:8px 10px;margin:6px 0;display:flex;align-items:center;gap:10px}
+  .mock-match .t{flex:1}
+  .mock-match .t small{color:var(--muted)}
+  .mock-match .lv{color:var(--live);font-weight:700}
+  .mock-odds{display:flex;gap:5px}
+  .mock-odds span{background:#1a3d31;border:1px solid var(--line);border-radius:6px;padding:3px 8px;text-align:center;min-width:44px;font-size:11px;color:var(--muted)}
+  .mock-odds span b{display:block;color:var(--gold);font-size:13px}
+  .mock-odds span.sel{outline:1.5px solid var(--gold)}
+  .mock-slip{background:var(--card);border-left:1px solid var(--line);padding:12px}
+  .mock-slip h4{font-size:14px;margin-bottom:8px}
+  .mock-slip .leg{background:#0a1f19;border-radius:6px;padding:7px;margin:5px 0;font-size:12px}
+  .mock-slip .leg b{color:var(--gold)}
+  .mock-slip .tot{margin-top:10px;border-top:1px solid var(--line);padding-top:8px}
+  .mock-slip .btn{margin-top:10px;background:var(--gold);color:#10201a;text-align:center;font-weight:800;border-radius:6px;padding:8px}
+  .callouts{display:flex;flex-direction:column;gap:12px}
+  .callouts .card{padding:14px 16px}
+  .callouts p{font-size:16px}
+
+  /* flow */
+  .flow{display:flex;align-items:stretch;gap:12px;margin-top:10px}
+  .flow .step{flex:1;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px}
+  .flow .step .n{width:34px;height:34px;border-radius:50%;background:var(--gold);color:#10201a;font-weight:900;display:grid;place-items:center;margin-bottom:12px}
+  .flow .step p{font-size:16px}
+  .flow .arrow{align-self:center;color:var(--gold);font-size:28px}
+  .hashbox{margin-top:22px;background:#04100c;border:1px dashed var(--accent);border-radius:12px;padding:14px 18px;font-size:15px;color:var(--muted)}
+  .hashbox .mono{color:var(--accent);word-break:break-all;font-size:15px}
+
+  /* architecture */
+  .arch{display:grid;grid-template-columns:1fr 1fr 1fr;gap:18px;align-items:start}
+  .layer{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px}
+  .layer h3{color:var(--gold);font-size:19px}
+  .layer p{font-size:16px;margin-top:4px}
+  .adapters{margin-top:18px;display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  .adapter{border:1px solid var(--accent);border-radius:12px;padding:12px 14px;background:#0b231c}
+  .adapter code{color:var(--accent);font-size:15px}
+  .adapter p{font-size:15px;margin-top:4px}
+
+  /* roadmap */
+  .road{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-top:10px}
+  .ms{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;position:relative}
+  .ms .tag{font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;padding:3px 9px;border-radius:999px;display:inline-block;margin-bottom:10px}
+  .ms .done{background:var(--accent);color:#04130d}
+  .ms .demo{background:var(--gold);color:#10201a}
+  .ms .next{background:transparent;border:1px solid var(--muted);color:var(--muted)}
+  .ms p{font-size:15px}
+  .ms h3{font-size:19px}
+
+  /* controls */
+  .progress{position:fixed;left:0;top:0;height:3px;background:var(--gold);transition:width .3s;z-index:10}
+  .hint{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);color:#5f7d72;font-size:12px;z-index:10}
+  .navbtn{position:fixed;top:50%;transform:translateY(-50%);background:#0f2a22cc;border:1px solid var(--line);color:var(--text);width:44px;height:44px;border-radius:50%;font-size:22px;cursor:pointer;z-index:10;opacity:.5}
+  .navbtn:hover{opacity:1}
+  .navbtn.l{left:14px}.navbtn.r{right:14px}
+
+  @media print{
+    @page{size:1280px 720px;margin:0}
+    html,body{overflow:visible;background:var(--bg)}
+    .viewport{position:static;display:block}
+    .stage{transform:none!important;width:auto;height:auto}
+    .slide{position:relative;opacity:1;visibility:visible;transform:none;width:1280px;height:720px;page-break-after:always;border-radius:0}
+    .progress,.hint,.navbtn{display:none}
+  }
+  @media (prefers-reduced-motion:reduce){.slide{transition:none}}
+</style>
+</head>
+<body>
+<div class="progress" id="progress"></div>
+<button class="navbtn l" id="prevBtn" aria-label="Previous slide">‹</button>
+<button class="navbtn r" id="nextBtn" aria-label="Next slide">›</button>
+<div class="hint">← → / Space to navigate · F fullscreen · Ctrl+P to export PDF</div>
+
+<div class="viewport"><div class="stage" id="stage">
+
+<!-- 1. Title -->
+<section class="slide title-slide">
+  <div class="wordmark">
+    <svg class="shield" viewBox="0 0 86 96" aria-hidden="true"><path d="M43 3 80 16v30c0 24-16 40-37 47C22 86 6 70 6 46V16Z" fill="#0b3d2e" stroke="#f5c518" stroke-width="4"/><path d="M28 30h30v8c0 9-6 15-15 15s-15-6-15-15Z" fill="#f5c518"/><path d="M38 53h10v9h7v6H31v-6h7Z" fill="#f5c518"/></svg>
+    <div class="kicker" style="margin:0">Pitch deck · 2026</div>
+  </div>
+  <h1>USHINDI <span>BET</span></h1>
+  <p class="tagline">A transparent sports-betting and casino platform built for Tanzania: Swahili first, paid in TZS through mobile money.</p>
+  <p class="sw" style="font-size:22px;margin-top:14px">"Ushindi" — victory, in Swahili.</p>
+  <p class="disclaimer">Working sandbox demo · no real money · 18+ · launch is subject to a Gaming Board of Tanzania licence</p>
+</section>
+
+<!-- 2. Problem -->
+<section class="slide">
+  <div class="brand">USHINDI BET</div>
+  <div class="kicker">The problem</div>
+  <h2>Betting players don't trust what happens to their money</h2>
+  <div class="grid2">
+    <div class="card"><span class="icon">🔒</span><h3>Opaque withdrawals</h3><p>Players often learn the cash-out rules only after they've deposited, and then their winnings get held up.</p></div>
+    <div class="card"><span class="icon">📜</span><h3>Hidden bonus strings</h3><p>Wagering requirements end up covering the player's own deposit as well as the bonus.</p></div>
+    <div class="card"><span class="icon">🎲</span><h3>"Is this game rigged?"</h3><p>Instant games like crash ask for blind trust and offer no way to verify a round.</p></div>
+    <div class="card"><span class="icon">🌍</span><h3>Not built for locals</h3><p>Products are English-first and use generic layouts, with local leagues and payment habits added as an afterthought.</p></div>
+  </div>
+</section>
+
+<!-- 3. Solution -->
+<section class="slide">
+  <div class="brand">USHINDI BET</div>
+  <div class="kicker">The solution</div>
+  <h2>Transparency is designed into the product, not added in the terms page</h2>
+  <div class="grid3">
+    <div class="card"><span class="icon">📋</span><h3>Rules before deposit</h3><p>Withdrawal limits, processing time and KYC steps appear on the deposit screen in Swahili and English.</p><span class="sw">Kanuni KABLA ya kuweka pesa</span></div>
+    <div class="card"><span class="icon">🎁</span><h3>Bonus-only wagering</h3><p>The x5 wagering requirement applies only to bonus money. We never withhold a player's own deposits or winnings for undisclosed reasons.</p></div>
+    <div class="card"><span class="icon">🔐</span><h3>Provably fair crash</h3><p>Every round's seed is committed before it starts and revealed afterwards, so anyone can check the result. RTP is published at 97%.</p></div>
+  </div>
+  <p class="muted" style="margin-top:26px">Responsible-gambling tools (limits, cooldown, self-exclusion) are always one tap away.</p>
+</section>
+
+<!-- 4. Built for Tanzania -->
+<section class="slide">
+  <div class="brand">USHINDI BET</div>
+  <div class="kicker">Local by default</div>
+  <h2>Built for Tanzania from the first line of code</h2>
+  <div class="grid4" style="margin-bottom:28px">
+    <div class="card"><div class="stat">SW</div><div class="stat-label">Swahili is the default language, with English one tap away</div></div>
+    <div class="card"><div class="stat">TZS</div><div class="stat-label">Shilling amounts with no decimals</div></div>
+    <div class="card"><div class="stat">+255</div><div class="stat-label">Sign-up with a phone number and SMS code</div></div>
+    <div class="card"><div class="stat">EAT</div><div class="stat-label">Every kick-off is shown in Africa/Dar_es_Salaam time</div></div>
+  </div>
+  <div class="grid2">
+    <div class="card"><h3>Mobile-money cashier</h3><p><span class="pill">M-Pesa</span><span class="pill">Tigo Pesa</span><span class="pill">Airtel Money</span><span class="pill">HaloPesa</span></p></div>
+    <div class="card"><h3>Local football up front</h3><p><span class="pill gold">Simba SC vs Yanga SC</span><span class="pill">Azam FC</span><span class="pill">Coastal Union</span><span class="pill">Namungo FC</span><span class="pill">Ligi Kuu boosts</span></p></div>
+  </div>
+  <p class="muted" style="margin-top:20px">Mobile-first layout with a bottom tab bar and a full-screen betslip, plus dark and light themes.</p>
+</section>
+
+<!-- 5. Product -->
+<section class="slide">
+  <div class="brand">USHINDI BET</div>
+  <div class="kicker">The product</div>
+  <h2 style="margin-bottom:22px">A sportsbook that feels familiar from the first visit</h2>
+  <div style="display:grid;grid-template-columns:1fr 270px;gap:22px">
+    <div class="mock" aria-label="Ushindi Bet home screen mock-up">
+      <div class="mock-head"><span>☰</span><span class="logo">USHINDI BET</span><span class="sp"></span><span class="muted">Salio: TZS 100,000</span><span>SW</span><span class="dep">Weka Pesa</span></div>
+      <div class="mock-rail">
+        <div class="on">⚽ Mpira wa Miguu <b>128</b></div><div>🏀 Kikapu <b>42</b></div><div>🎾 Tenisi <b>36</b></div><div>🏏 Kriketi <b>18</b></div><div>🏐 Wavu <b>16</b></div><div>🏒 Hoki <b>22</b></div><div>🏓 Tenisi ya Meza <b>20</b></div><div>🎮 eSoccer <b>24</b></div><div>🥊 Ndondi <b>8</b></div><div class="muted" style="justify-content:flex-start">+9 more</div>
+      </div>
+      <div class="mock-main">
+        <div class="mock-hero"><b>Kubeti Mubashara</b>Odds zinazobadilika kila dakika kwenye mechi zinazoendelea.</div>
+        <div class="mock-league">LIGI KUU TANZANIA • TANZANIA</div>
+        <div class="mock-match"><div class="t"><b>Simba SC vs Yanga SC</b><br/><small><span class="lv">LIVE 56' 1-1</span> · +84 Markets</small></div><div class="mock-odds"><span class="sel">1<b>2.40</b></span><span>X<b>3.00</b></span><span>2<b>2.90</b></span></div></div>
+        <div class="mock-match"><div class="t"><b>Azam FC vs Singida BS</b><br/><small><span class="lv">LIVE 23' 1-0</span> · +76 Markets</small></div><div class="mock-odds"><span>1<b>1.85</b></span><span>X<b>3.30</b></span><span>2<b>4.10</b></span></div></div>
+        <div class="mock-league">LIGI ZA ULAYA • INTERNATIONAL</div>
+        <div class="mock-match"><div class="t"><b>Arsenal vs Chelsea</b><br/><small>Today · EAT · +92 Markets</small></div><div class="mock-odds"><span>1<b>2.10</b></span><span class="sel">X<b>3.40</b></span><span>2<b>3.20</b></span></div></div>
+        <div class="mock-match"><div class="t"><b>Real Madrid vs FC Barcelona</b><br/><small>Tomorrow · EAT · +95 Markets</small></div><div class="mock-odds"><span>1<b>2.50</b></span><span>X<b>3.50</b></span><span>2<b>2.60</b></span></div></div>
+      </div>
+      <div class="mock-slip">
+        <h4>Betslip (2)</h4>
+        <div class="leg">Simba SC vs Yanga SC<br/>1 @ <b>2.40</b></div>
+        <div class="leg">Arsenal vs Chelsea<br/>X @ <b>3.40</b></div>
+        <div class="tot">Stake: TZS 2,000<br/>Odds: <b class="gold">8.16</b><br/>Potential: <b class="gold">TZS 16,320</b></div>
+        <div class="btn">Weka Beti</div>
+      </div>
+    </div>
+    <div class="callouts">
+      <div class="card"><h3 style="font-size:17px">Three-column desktop</h3><p>Sports rail, match list and betslip on one screen. The side panel can be collapsed.</p></div>
+      <div class="card"><h3 style="font-size:17px">Live odds ticking</h3><p>Prices update every few seconds, with the live minute and score shown inline.</p></div>
+      <div class="card"><h3 style="font-size:17px">Accumulators</h3><p>The combined odds and payout update in TZS as each leg is added.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- 6. Product surface -->
+<section class="slide">
+  <div class="brand">USHINDI BET</div>
+  <div class="kicker">One wallet, many verticals</div>
+  <h2>Everything a Tanzanian player expects, in one app</h2>
+  <div class="grid4" style="margin-bottom:22px">
+    <div class="card"><div class="stat">18</div><div class="stat-label">sports in the rail, named in Swahili</div></div>
+    <div class="card"><div class="stat">411</div><div class="stat-label">events in the demo catalogue</div></div>
+    <div class="card"><div class="stat">95</div><div class="stat-label">markets on the biggest match (Main, Goals, BTTS, Halftime…)</div></div>
+    <div class="card"><div class="stat">97%</div><div class="stat-label">published crash RTP</div></div>
+  </div>
+  <div class="grid3">
+    <div class="card"><h3>⚽ Sportsbook &amp; Live</h3><p>Highlights and Upcoming tabs, filters for 1X2, Over/Under 2.5 and BTTS, a live-only view, Livescore and printable fixtures.</p></div>
+    <div class="card"><h3>🏆 Jackpots &amp; 🚀 Crash</h3><p>A Mega Jackpot of TZS 100,000,000, a Daily Jackpot of TZS 5,000,000 and a Ligi Kuu Jackpot, plus a crash game players can verify.</p></div>
+    <div class="card"><h3>🎰 Casino &amp; 🎮 Virtuals</h3><p>Original titles such as <i>Slots za Safari</i> and <i>Roulette ya Dar</i>, plus virtual football, racing and tennis.</p></div>
+  </div>
+</section>
+
+<!-- 7. Trust: money rules -->
+<section class="slide">
+  <div class="brand">USHINDI BET</div>
+  <div class="kicker">Trust by design · money</div>
+  <h2>Players see the rules before they pay</h2>
+  <div class="grid2" style="align-items:start">
+    <div class="card" style="border-color:var(--gold)">
+      <h3 class="gold">Shown on the deposit screen</h3>
+      <ul class="clean">
+        <li>KYC comes first <span class="sw">Thibitisha utambulisho kwanza</span></li>
+        <li>Processing takes 1–24 hours</li>
+        <li>Min TZS 1,000 · Max TZS 5,000,000 per transaction</li>
+        <li>Wagering (x5) applies to bonus money only</li>
+        <li>We never withhold your own deposits or winnings for undisclosed reasons</li>
+      </ul>
+    </div>
+    <div>
+      <div class="card" style="margin-bottom:18px"><h3>🧾 Append-only ledger</h3><p>A database trigger blocks any UPDATE or DELETE on transactions. Balances are derived from the ledger and can be audited.</p></div>
+      <div class="card" style="margin-bottom:18px"><h3>✅ Official-results settlement</h3><p>Only the official results provider can settle a bet. Each settlement writes an immutable ledger entry and an audit-log entry.</p></div>
+      <div class="card"><h3>🛡️ Admin with guardrails</h3><p>Margins, stake limits and the KYC review queue are managed in the admin panel, and every change is written to the audit log.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- 8. Provably fair -->
+<section class="slide">
+  <div class="brand">USHINDI BET</div>
+  <div class="kicker">Trust by design · games</div>
+  <h2>Crash rounds that anyone can verify</h2>
+  <div class="flow">
+    <div class="step"><div class="n">1</div><h3>Commit</h3><p>The server publishes <code>sha256(serverSeed)</code> before the round starts.</p></div>
+    <div class="arrow">→</div>
+    <div class="step"><div class="n">2</div><h3>Play</h3><p>The multiplier comes from <code>HMAC_SHA256(serverSeed, clientSeed:nonce)</code>.</p></div>
+    <div class="arrow">→</div>
+    <div class="step"><div class="n">3</div><h3>Crash</h3><p><code>max(1, 0.97 / (1 − r))</code>, capped at 100x. The 3% house edge is public.</p></div>
+    <div class="arrow">→</div>
+    <div class="step"><div class="n">4</div><h3>Reveal</h3><p>The seed is revealed after the round. Anyone can check it at <code>/api/crash/verify/:id</code>.</p></div>
+  </div>
+  <div class="hashbox">
+    Live commitment from the running API (<span class="mono">GET /api/crash/current</span>):<br/>
+    <span class="mono" id="liveHash">b2f59e7b02d7b42abfb1c3033c7d2b3b78e52ff7982a24abd0766ce2b883711c</span>
+    <span id="liveHashNote"> · published RTP 97%</span>
+  </div>
+</section>
+
+<!-- 9. Responsible gambling -->
+<section class="slide">
+  <div class="brand">USHINDI BET</div>
+  <div class="kicker">Responsible gambling</div>
+  <h2>Player protection built into the core product</h2>
+  <p class="sw" style="margin:-18px 0 26px;font-size:20px">Kubeti kwa Uwajibikaji</p>
+  <div class="grid4">
+    <div class="card"><span class="icon">🔞</span><h3>18+ gate</h3><p>An age modal on first visit, plus a date-of-birth check at registration.</p></div>
+    <div class="card"><span class="icon">📉</span><h3>Deposit limits</h3><p>Daily and weekly limits that the cashier enforces.</p></div>
+    <div class="card"><span class="icon">⏸️</span><h3>24h cooldown</h3><p>Take a break with one tap.</p></div>
+    <div class="card"><span class="icon">🚫</span><h3>Self-exclusion</h3><p>Six months, stored on the account and set by the player.</p></div>
+  </div>
+  <p style="margin-top:28px">Reality-check messages and links to support from the Gaming Board of Tanzania appear on every page footer.</p>
+</section>
+
+<!-- 10. Architecture -->
+<section class="slide">
+  <div class="brand">USHINDI BET</div>
+  <div class="kicker">Technology</div>
+  <h2>A modern stack, ready for licensed integrations</h2>
+  <div class="arch">
+    <div class="layer"><h3>Web</h3><p>Vue 3 + Pinia + vue-i18n (SW/EN)<br/>Mobile-first, dark/light themes<br/>nginx SPA deep links</p></div>
+    <div class="layer"><h3>API</h3><p>Fastify + TypeScript<br/>Matches, crash, payments, admin, audit<br/>Falls back to in-memory storage, so it runs without a database</p></div>
+    <div class="layer"><h3>Data</h3><p>PostgreSQL 16, with an append-only ledger and audit log<br/>Redis 7 for the odds-tick cache and sessions<br/>Docker Compose brings up all four services</p></div>
+  </div>
+  <div class="adapters">
+    <div class="adapter"><code>PaymentProvider</code><p>Swap in a real mobile-money aggregator without rewriting the cashier.</p></div>
+    <div class="adapter"><code>OddsFeedAdapter</code><p>Plug in a licensed feed; the operator margin is applied server-side.</p></div>
+    <div class="adapter"><code>OfficialResultsProvider</code><p>The single source of truth for settlement.</p></div>
+  </div>
+</section>
+
+<!-- 11. Business model -->
+<section class="slide">
+  <div class="brand">USHINDI BET</div>
+  <div class="kicker">Business model</div>
+  <h2>Revenue from several verticals, with settings the operator controls</h2>
+  <div class="grid2" style="align-items:start">
+    <div>
+      <div class="card" style="margin-bottom:16px"><h3>📈 Sportsbook margin</h3><p>Fair odds pass through a margin set in admin before players see them. The default is <b class="gold">6% (600 bps)</b>.</p></div>
+      <div class="card" style="margin-bottom:16px"><h3>🚀 Crash &amp; casino edge</h3><p>The published RTP on crash is 97%, which leaves a 3% house edge that players can see.</p></div>
+      <div class="card"><h3>🏆 Jackpot pools</h3><p>Weekly mega and daily jackpots drive repeat engagement around Ligi Kuu matchdays.</p></div>
+    </div>
+    <div class="card" style="border-color:var(--gold)">
+      <h3 class="gold">Acquisition &amp; retention</h3>
+      <ul class="clean">
+        <li>Welcome offer: 100% up to TZS 50,000 (x5 wagering on the bonus only)</li>
+        <li>Monday 10% cashback</li>
+        <li>Odds boosts on Ligi Kuu</li>
+        <li>Shareable printed fixtures for offline reach</li>
+      </ul>
+      <p class="muted" style="margin-top:14px;font-size:17px">Stake limits: TZS 500 – 500,000 per bet (admin-configurable)</p>
+    </div>
+  </div>
+</section>
+
+<!-- 12. Roadmap -->
+<section class="slide">
+  <div class="brand">USHINDI BET</div>
+  <div class="kicker">Where we are</div>
+  <h2>The working demo is built. The next step is production.</h2>
+  <div class="road">
+    <div class="ms"><span class="tag done">Done</span><h3>M1</h3><p>Plan, brand and full-stack scaffold</p></div>
+    <div class="ms"><span class="tag demo">Sandbox</span><h3>M2</h3><p>Core betting, betslip and mock wallet</p></div>
+    <div class="ms"><span class="tag demo">Sandbox</span><h3>M3</h3><p>Provably fair crash, casino, virtuals and jackpots</p></div>
+    <div class="ms"><span class="tag demo">Sandbox</span><h3>M4</h3><p>Auth, responsible-gambling tools and admin console</p></div>
+    <div class="ms"><span class="tag next">Next</span><h3>M5</h3><p>Postgres/Redis wiring, tests and licensed integrations</p></div>
+  </div>
+  <p style="margin-top:30px">Today you can run the whole product locally with <code class="gold">docker compose up</code>. Every route works on mock data, and every integration sits behind an interface that a real provider can replace.</p>
+</section>
+
+<!-- 13. The ask -->
+<section class="slide">
+  <div class="brand">USHINDI BET</div>
+  <div class="kicker">The ask</div>
+  <h2>Help us take Ushindi from sandbox to licensed launch</h2>
+  <div class="grid2" style="align-items:start">
+    <div class="card">
+      <h3 class="gold">What launch requires</h3>
+      <ul class="clean">
+        <li>Gaming Board of Tanzania licence</li>
+        <li>A payment-aggregator contract for M-Pesa, Tigo, Airtel and HaloPesa</li>
+        <li>A licensed odds feed and official results</li>
+        <li>KYC/AML, tax setup and legal review</li>
+        <li>Responsible-gambling certification</li>
+      </ul>
+    </div>
+    <div class="card" style="border-color:var(--gold)">
+      <h3 class="gold">We're looking for</h3>
+      <ul class="clean">
+        <li>Funding: <b>[amount to confirm]</b></li>
+        <li>Licensing and compliance partners</li>
+        <li>Payment and odds-feed partners</li>
+        <li>Local marketing and football partnerships</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- 14. Close -->
+<section class="slide title-slide">
+  <div class="kicker">Asante · Thank you</div>
+  <h1>USHINDI <span>BET</span></h1>
+  <p class="tagline">Betting players in Tanzania can trust, in their own language.</p>
+  <p style="margin-top:30px" class="muted">Live demo: <span class="gold">http://localhost:5173</span> · API: <span class="gold">http://localhost:4000/health</span></p>
+  <p class="disclaimer">Sandbox demo: all money, odds, SMS and payments are mock. 18+ only. Gambling involves risk; please play responsibly.</p>
+</section>
+
+</div></div>
+
+<script>
+  const slides=[...document.querySelectorAll('.slide')];
+  const stage=document.getElementById('stage'),progress=document.getElementById('progress');
+  slides.forEach((s,i)=>{const n=document.createElement('div');n.className='num';n.textContent=`${i+1} / ${slides.length}`;s.appendChild(n)});
+  let cur=Math.min(Math.max((parseInt(location.hash.slice(1))||1)-1,0),slides.length-1);
+  function show(i){
+    cur=Math.max(0,Math.min(slides.length-1,i));
+    slides.forEach((s,k)=>{s.classList.toggle('active',k===cur);s.classList.toggle('prev',k<cur)});
+    progress.style.width=((cur+1)/slides.length*100)+'%';
+    history.replaceState(null,'','#'+(cur+1));
+  }
+  function fit(){const sc=Math.min(innerWidth/1280,innerHeight/720)*0.96;stage.style.transform=`scale(${sc})`}
+  addEventListener('resize',fit);fit();show(cur);
+  addEventListener('keydown',e=>{
+    if(['ArrowRight','PageDown',' ','Enter'].includes(e.key)){e.preventDefault();show(cur+1)}
+    else if(['ArrowLeft','PageUp','Backspace'].includes(e.key)){e.preventDefault();show(cur-1)}
+    else if(e.key==='Home')show(0);else if(e.key==='End')show(slides.length-1);
+    else if(e.key.toLowerCase()==='f'){document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen()}
+  });
+  document.getElementById('nextBtn').onclick=()=>show(cur+1);
+  document.getElementById('prevBtn').onclick=()=>show(cur-1);
+  let tx=null;addEventListener('touchstart',e=>tx=e.touches[0].clientX,{passive:true});
+  addEventListener('touchend',e=>{if(tx===null)return;const dx=e.changedTouches[0].clientX-tx;if(Math.abs(dx)>50)show(cur+(dx<0?1:-1));tx=null});
+  // Pull the live seed commitment if the local API is running; keep the captured value otherwise.
+  fetch('http://localhost:4000/api/crash/current').then(r=>r.json()).then(d=>{
+    if(d.serverSeedHash){document.getElementById('liveHash').textContent=d.serverSeedHash;document.getElementById('liveHashNote').textContent=` · nonce ${d.nonce} · published RTP ${d.publishedRtp||'97%'} · fetched live`}
+  }).catch(()=>{});
+</script>
+</body>
+</html>

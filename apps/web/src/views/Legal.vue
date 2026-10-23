@@ -1,0 +1,1 @@
+<template><h2>Terms / Privacy</h2><div class="card"><p>Sandbox demo terms: no real money, mock odds/payments. Real operation requires Gaming Board of Tanzania licence, KYC/AML, and published rules. Privacy: demo stores data only in your browser (localStorage).</p></div></template>

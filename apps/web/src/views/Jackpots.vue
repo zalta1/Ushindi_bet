@@ -1,0 +1,1 @@
+<template><h2>Jackpots</h2><div class="grid"><div class="tile" v-for="j in ['Mega Jackpot TZS 100,000,000','Daily Jackpot TZS 5,000,000','Ligi Kuu Jackpot']"><h3>{{j}}</h3><p>Chagua mechi 13 (mock)</p><button>Cheza / Play</button></div></div></template>

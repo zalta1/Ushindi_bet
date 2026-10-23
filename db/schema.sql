@@ -1,0 +1,17 @@
+CREATE TABLE IF NOT EXISTS users(id SERIAL PRIMARY KEY, phone TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, full_name TEXT, dob DATE NOT NULL, kyc_status TEXT DEFAULT 'pending', self_excluded_until TIMESTAMPTZ, created_at TIMESTAMPTZ DEFAULT now());
+CREATE TABLE IF NOT EXISTS wallets(id SERIAL PRIMARY KEY, user_id INT REFERENCES users(id), balance_tzs BIGINT DEFAULT 0, bonus_balance_tzs BIGINT DEFAULT 0, currency TEXT DEFAULT 'TZS');
+CREATE TABLE IF NOT EXISTS transactions(id SERIAL PRIMARY KEY, wallet_id INT REFERENCES wallets(id), type TEXT NOT NULL, amount BIGINT NOT NULL, status TEXT DEFAULT 'completed', provider TEXT, provider_ref TEXT, created_at TIMESTAMPTZ DEFAULT now());
+CREATE TABLE IF NOT EXISTS matches(id SERIAL PRIMARY KEY, sport TEXT, league TEXT, home TEXT, away TEXT, kickoff_at TIMESTAMPTZ, status TEXT DEFAULT 'upcoming', home_score INT DEFAULT 0, away_score INT DEFAULT 0);
+CREATE TABLE IF NOT EXISTS markets(id SERIAL PRIMARY KEY, match_id INT REFERENCES matches(id), name TEXT);
+CREATE TABLE IF NOT EXISTS odds(id SERIAL PRIMARY KEY, market_id INT REFERENCES markets(id), selection TEXT, price NUMERIC(6,2), updated_at TIMESTAMPTZ DEFAULT now());
+CREATE TABLE IF NOT EXISTS bets(id SERIAL PRIMARY KEY, user_id INT REFERENCES users(id), stake BIGINT, combined_odds NUMERIC(8,2), potential_payout BIGINT, status TEXT DEFAULT 'open', placed_at TIMESTAMPTZ DEFAULT now(), settled_at TIMESTAMPTZ);
+CREATE TABLE IF NOT EXISTS bet_legs(id SERIAL PRIMARY KEY, bet_id INT REFERENCES bets(id), match_id INT, market TEXT, selection TEXT, odds_at_placement NUMERIC(6,2));
+CREATE TABLE IF NOT EXISTS crash_rounds(id SERIAL PRIMARY KEY, server_seed_hash TEXT NOT NULL, server_seed TEXT, client_seed TEXT, nonce INT, crash_multiplier NUMERIC(8,2), rtp_bps INT DEFAULT 9700, created_at TIMESTAMPTZ DEFAULT now());
+CREATE TABLE IF NOT EXISTS kyc_documents(id SERIAL PRIMARY KEY, user_id INT REFERENCES users(id), doc_type TEXT, status TEXT DEFAULT 'pending');
+CREATE TABLE IF NOT EXISTS promotions(id SERIAL PRIMARY KEY, title_sw TEXT, title_en TEXT, wagering_multiplier INT DEFAULT 5, active BOOLEAN DEFAULT true);
+CREATE TABLE IF NOT EXISTS audit_log(id SERIAL PRIMARY KEY, actor TEXT, action TEXT, payload JSONB, created_at TIMESTAMPTZ DEFAULT now());
+CREATE TABLE IF NOT EXISTS official_results(match_id INT PRIMARY KEY, source TEXT, home_score INT, away_score INT, verified_at TIMESTAMPTZ DEFAULT now());
+CREATE OR REPLACE FUNCTION forbid_change() RETURNS trigger AS $$ BEGIN RAISE EXCEPTION 'append-only ledger'; END; $$ LANGUAGE plpgsql;
+DROP TRIGGER IF EXISTS tx_no_update ON transactions;
+CREATE TRIGGER tx_no_update BEFORE UPDATE OR DELETE ON transactions FOR EACH ROW EXECUTE FUNCTION forbid_change();
+CREATE TRIGGER audit_no_update BEFORE UPDATE OR DELETE ON audit_log FOR EACH ROW EXECUTE FUNCTION forbid_change();
