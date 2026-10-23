@@ -2,11 +2,12 @@ import './env-bootstrap.js'
 import { purgeExpiredSessions } from './auth/sessions.js'
 import { buildApp } from './app.js'
 import { loadConfig } from './config.js'
-import { closePool } from './db.js'
+import { closePool, waitForDatabase } from './db.js'
 import { migrate } from './migrate.js'
 import { seedSuperAdmin } from './seed.js'
 
 const cfg = loadConfig()
+await waitForDatabase(cfg)
 await migrate(cfg)
 await seedSuperAdmin(cfg)
 await purgeExpiredSessions(cfg)

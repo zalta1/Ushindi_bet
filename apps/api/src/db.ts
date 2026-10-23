@@ -11,7 +11,7 @@ export function getPool(cfg: AppConfig): pg.Pool {
       connectionString: cfg.databaseUrl,
       max: 10,
       idleTimeoutMillis: 30_000,
-      connectionTimeoutMillis: 5_000,
+      connectionTimeoutMillis: 10_000,
       application_name: 'ushindi-api',
       options: '-c TimeZone=Africa/Dar_es_Salaam -c statement_timeout=10000 -c lock_timeout=2000',
     })
@@ -25,6 +25,21 @@ export function getPool(cfg: AppConfig): pg.Pool {
 export async function closePool(): Promise<void> {
   await pool?.end()
   pool = null
+}
+
+export async function waitForDatabase(cfg: AppConfig, attempts = 30): Promise<void> {
+  let last: unknown
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      await getPool(cfg).query('SELECT 1')
+      return
+    } catch (err) {
+      last = err
+      await closePool()
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+    }
+  }
+  throw last
 }
 
 export async function withTx<T>(cfg: AppConfig, fn: (client: pg.PoolClient) => Promise<T>): Promise<T> {

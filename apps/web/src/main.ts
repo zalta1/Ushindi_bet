@@ -65,5 +65,6 @@ const app = createApp(App)
 app.use(pinia)
 app.use(i18n)
 app.use(router)
-await router.isReady()
-app.mount('#app')
+void router.isReady().then(() => {
+  app.mount('#app')
+})
