@@ -41,25 +41,20 @@ a.menuitem:hover,.sportbtn.menuitem:hover{background:#172a4d}:root.light a.menui
 }
 @media print{.leftpanel,.panel-toggle,.panel-backdrop{display:none!important}}
 
-/* --- Live Betting hero background video (does not change hero canvas/size) --- */
-/* Existing .hero rule above is untouched: same padding, margin, border-radius, no height/min-height added. */
+/* Hero panels stay on the dark gradient. The player site has no video layer. */
 .hero{position:relative;overflow:hidden}
-.hero-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0;pointer-events:none}
-.hero-overlay{position:absolute;inset:0;background:linear-gradient(135deg,rgba(8,16,34,.88),rgba(19,51,107,.55) 55%,rgba(0,0,0,.38));z-index:1;pointer-events:none}
-.hero-ui{position:relative;z-index:2}
-@media (prefers-reduced-motion: reduce){.hero-video,.hero-overlay{display:none!important}}
-
-.hero-side-img{position:absolute;top:8px;bottom:8px;right:48px;height:calc(100% - 16px);aspect-ratio:16/9;width:auto;max-width:45%;object-fit:contain;border-radius:10px;z-index:2;box-shadow:0 4px 14px rgba(0,0,0,.45)}
-.hero-text-live{flex:1;margin-right:calc(45% + 10px)}
-@media (max-width:640px){.hero-side-img{max-width:40%}.hero-text-live{margin-right:calc(40% + 6px)}}
 
 /* Landing carousel. Each slide keeps copy and art in separate boxes. */
 .landing-hero{position:relative;overflow:hidden;border-radius:14px;margin:10px 0;width:100%;min-width:0;background:radial-gradient(ellipse at 72% 46%,#1a1848 0%,#0c1428 54%,#05070c 100%);touch-action:pan-y}
 .landing-viewport{overflow:hidden;width:100%;min-width:0}
 .landing-track{display:flex;width:100%;min-width:0;max-width:100%;transition:transform .7s cubic-bezier(.22,.7,.3,1);will-change:transform}
-.landing-slide{flex:0 0 100%;width:100%;min-width:0;box-sizing:border-box;display:grid;grid-template-columns:minmax(0,.92fr) minmax(0,1.08fr);align-items:center;align-content:center;gap:8px;padding:16px 12px 8px 22px;--emerge:.85s}
+.landing-slide{position:relative;overflow:hidden;flex:0 0 100%;width:100%;min-width:0;box-sizing:border-box;display:grid;grid-template-columns:minmax(0,.92fr) minmax(0,1.08fr);align-items:center;align-content:center;gap:8px;padding:16px 12px 8px 22px;--emerge:.85s}
+.landing-bg{position:absolute;inset:-8%;z-index:0;pointer-events:none;background:url('./assets/slide2-bg.jpg') 72% 42% / cover no-repeat;filter:blur(1.5px);transform:scale(1.08);transform-origin:72% 42%;animation:league-zoom 22s ease-in-out infinite alternate;will-change:transform}
+.landing-shade{position:absolute;inset:0;z-index:1;pointer-events:none;background:linear-gradient(90deg,rgba(5,7,12,.92) 0%,rgba(5,7,12,.72) 36%,rgba(5,7,12,.34) 64%,rgba(5,7,12,.48) 100%)}
+@keyframes league-zoom{from{transform:scale(1.08)}to{transform:scale(1.18)}}
 .landing-slide:has(.landing-planes){--emerge:1.05s}
-.landing-text{position:relative;z-index:2;min-width:0;max-width:520px;padding:4px 0}
+.landing-text,.landing-art{position:relative;z-index:2}
+.landing-text{min-width:0;max-width:520px;padding:4px 0}
 .landing-text h2{color:var(--gold);margin:0 0 6px;font-size:clamp(22px,2.2vw,36px);line-height:1.12}
 .landing-text p{color:#fff;margin:0 0 12px;font-size:clamp(13px,1.15vw,16px);line-height:1.35}
 .landing-text h2,.landing-text p,.landing-cta{opacity:0;transform:translate3d(-28px,0,0)}
@@ -87,12 +82,15 @@ a.menuitem:hover,.sportbtn.menuitem:hover{background:#172a4d}:root.light a.menui
 @media (max-width:1199px){
   .landing-hero{border-radius:12px;margin:0 0 10px}
   .landing-slide{grid-template-columns:minmax(0,1fr);padding:8px 10px 4px}
+  .landing-bg{background-position:center 22%;transform-origin:center 22%}
+  .landing-shade{background:linear-gradient(180deg,rgba(5,7,12,.22) 0%,rgba(5,7,12,.3) 40%,rgba(5,7,12,.86) 64%,rgba(5,7,12,.95) 100%)}
   .landing-art{order:-1;width:100%;height:min(58vw,250px);padding:8px 8px 2px}
   .landing-art img{width:100%;height:100%;object-fit:contain}
   .landing-text{padding:8px 6px 0;max-width:none}
 }
 @media (prefers-reduced-motion: reduce){
-  .landing-track{transition:none}
+  .landing-track,.landing-bg{transition:none;animation:none!important}
+  .landing-bg{transform:scale(1.1)}
   .landing-art,.landing-art img,.landing-text h2,.landing-text p,.landing-cta{animation:none!important;opacity:1!important;transform:none!important}
 }
 .form-error{color:#ff5a5a;font-weight:700;margin:0 0 8px}

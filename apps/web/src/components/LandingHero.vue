@@ -167,6 +167,10 @@ onUnmounted(stop)
           :aria-hidden="i !== index ? 'true' : undefined"
           :inert="i !== index ? true : undefined"
         >
+          <template v-if="slide.id === 'live'">
+            <div class="landing-bg" aria-hidden="true"></div>
+            <div class="landing-shade" aria-hidden="true"></div>
+          </template>
           <div class="landing-text">
             <h2>{{ t(slide.title) }}</h2>
             <p>{{ t(slide.body) }}</p>
