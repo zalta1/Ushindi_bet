@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import plane from '../assets/hero-planes.png'
+import AviatorFlight from '../components/AviatorFlight.vue'
 import { ApiClientError, api } from '../api'
 import { useAuth } from '../stores/store'
 
@@ -52,6 +52,7 @@ const autoOn = ref([false, false])
 const autoAt = ref([2, 2])
 const chatBody = ref('')
 const busy = ref(false)
+const liveMult = ref(1)
 let source: EventSource | null = null
 let poll: ReturnType<typeof setInterval> | undefined
 let viewers: ReturnType<typeof setInterval> | undefined
@@ -174,28 +175,9 @@ function pill(mult: number) {
 
 const money = (n: number) => `TSH ${Number(n || 0).toLocaleString('sw-TZ')}`
 
-const planeStyle = computed(() => {
-  const phase = snap.value?.phase
-  const mult = snap.value?.multiplier ?? 1
-  const progress = phase === 'flying' || phase === 'crashed'
-    ? Math.min(1, Math.log(Math.max(mult, 1)) / Math.log(12))
-    : 0.05
-  return {
-    left: `${8 + progress * 52}%`,
-    top: `${64 - progress * 46}%`,
-    transform: `rotate(${-6 - progress * 16}deg)`,
-    opacity: phase === 'crashed' ? '0.45' : '1',
-  }
-})
-
-const headline = computed(() => {
-  const phase = snap.value?.phase
-  if (!snap.value?.enabled && phase !== 'flying') return t('aviator.disabled')
-  if (phase === 'betting') return `${Math.max(1, Math.ceil((snap.value?.countdownMs ?? 0) / 1000))}`
-  if (phase === 'crashed') return t('aviator.flewAway')
-  if (phase === 'flying') return `${(snap.value?.multiplier ?? 1).toFixed(2)}x`
-  return t('aviator.wait')
-})
+function previewMult() {
+  return snap.value?.phase === 'flying' ? liveMult.value : (snap.value?.multiplier ?? 1)
+}
 </script>
 
 <template>
@@ -211,15 +193,15 @@ const headline = computed(() => {
         <span v-if="!snap?.history.length" class="muted">{{ $t('aviator.noHistory') }}</span>
       </div>
 
-      <div class="av-sky" :class="snap?.phase">
-        <img class="av-plane" :src="plane" alt="" data-testid="aviator-plane" :style="planeStyle" />
-        <div class="av-readout">
-          <p class="av-phase">{{ snap?.phase === 'betting' ? $t('aviator.betting') : (snap?.phase === 'flying' ? $t('aviator.flying') : '') }}</p>
-          <h1 data-testid="aviator-multiplier" :class="{ crash: snap?.phase === 'crashed' }">{{ headline }}</h1>
-          <p v-if="snap?.phase === 'crashed'" class="av-crash">{{ (snap?.multiplier ?? 1).toFixed(2) }}x</p>
-          <p class="av-meta">{{ $t('aviator.viewers', { n: snap?.viewerCount ?? 0 }) }} · RTP {{ ((snap?.limits.aviatorRtpBps ?? 9600) / 100).toFixed(2) }}%</p>
-        </div>
-      </div>
+      <AviatorFlight
+        :phase="snap?.phase ?? 'idle'"
+        :multiplier="snap?.multiplier ?? 1"
+        :countdown-ms="snap?.countdownMs ?? 0"
+        :enabled="snap?.enabled ?? true"
+        :viewer-count="snap?.viewerCount ?? 0"
+        :rtp-bps="snap?.limits.aviatorRtpBps ?? 9600"
+        @live="liveMult = $event"
+      />
 
       <p v-if="error" class="form-error" data-testid="aviator-error">{{ error }}</p>
       <p v-if="snap && !snap.enabled" class="muted">{{ $t('aviator.disabled') }}</p>
@@ -251,7 +233,7 @@ const headline = computed(() => {
             class="av-cash"
             :disabled="busy"
             :data-testid="`aviator-cashout-${panel}`"
-          >{{ $t('aviator.cashout') }} {{ money(Math.min(Math.floor(mine(panel)!.stakeTzs * (snap?.multiplier ?? 1)), snap?.limits.aviatorMaxWin ?? mine(panel)!.stakeTzs)) }}</button>
+          >{{ $t('aviator.cashout') }} {{ money(Math.min(Math.floor(mine(panel)!.stakeTzs * previewMult()), snap?.limits.aviatorMaxWin ?? mine(panel)!.stakeTzs)) }}</button>
           <button
             v-else-if="mine(panel)?.status === 'cashed_out'"
             type="button"
