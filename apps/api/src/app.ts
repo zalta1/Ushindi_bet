@@ -37,6 +37,7 @@ import { registerDepositRoutes } from './deposits/routes.js'
 import { registerAviatorRoutes } from './aviator/routes.js'
 import { registerPublicRoutes } from './routes/public.js'
 import { registerJackpotRoutes } from './jackpot/routes.js'
+import { registerDiceRoutes } from './dice/routes.js'
 import { registerSportsRoutes } from './sports/routes.js'
 
 function waitUntilReady(redis: Redis, timeoutMs: number): Promise<void> {
@@ -190,6 +191,7 @@ export async function buildApp(overrides: Partial<AppConfig> = {}): Promise<Fast
   registerAviatorRoutes(app, cfg)
   registerSportsRoutes(app, cfg)
   registerJackpotRoutes(app, cfg)
+  registerDiceRoutes(app, cfg)
   registerAuthRoutes(app, cfg)
   registerDepositRoutes(app, cfg)
   registerAdminRoutes(app, cfg)
