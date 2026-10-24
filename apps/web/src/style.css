@@ -221,9 +221,20 @@ button.av-cash{width:100%;background:var(--gold);color:#10201a;font-weight:800;b
 .dice-board input[type=range]{width:100%}
 .dice-budget{margin-top:16px}
 .jackpot-form input[type=checkbox]{width:auto}
-.layout.dice-route{grid-template-columns:240px minmax(0,1fr)}
-.layout.dice-route.collapsed{grid-template-columns:0 minmax(0,1fr)}
+.layout.dice-route,.layout.mines-route{grid-template-columns:240px minmax(0,1fr)}
+.layout.dice-route.collapsed,.layout.mines-route.collapsed{grid-template-columns:0 minmax(0,1fr)}
+.mines{max-width:720px}
+.mines-board{text-align:center}
+.mines-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;max-width:420px;margin:12px auto}
+.mines-cell{aspect-ratio:1;font-size:22px;border-radius:10px;background:#16315c;color:#fff;min-height:52px}
+.mines-cell.safe{background:#1f8a4c}
+.mines-cell.mine{background:#ff5a5a}
+.mines-cell:disabled{opacity:1}
+.mines-board .win{color:var(--accent);font-weight:800}
+.mines-board .loss{color:#ff5a5a;font-weight:800}
+.mines-board input[type=range]{width:100%}
 @media(max-width:900px){
-  .layout.dice-route,.layout.dice-route.collapsed{grid-template-columns:1fr}
+  .layout.dice-route,.layout.dice-route.collapsed,.layout.mines-route,.layout.mines-route.collapsed{grid-template-columns:1fr}
   .dice-roll{font-size:64px}
+  .mines-cell{min-height:44px;font-size:18px}
 }

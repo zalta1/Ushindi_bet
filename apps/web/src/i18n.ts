@@ -44,7 +44,19 @@ const sw = {
     budgetRemaining: 'Bajeti iliyobaki', budgetAmount: 'Bajeti', budgetLoss: 'Loss rate', budgetCap: 'Kikomo cha malipo (55%)', budgetCapHit: 'Kikomo kimefikiwa', budgetSet: 'Weka bajeti mpya', budgetSave: 'Hifadhi bajeti', budgetReset: 'Rejesha 0', budgetSaved: 'Bajeti ya Dice imehifadhiwa.',
     health_good: 'Afya Nzuri', health_normal: 'Kawaida', health_caution: 'Tahadhari', health_recovery: 'Recovery Mode', health_danger: 'Hatari',
   },
-  adminNav: { overview: 'Overview', transactions: 'Miamala', 'payment-api': 'API za Malipo', 'speedpesa-logs': 'SpeedPesa Logs', 'vodacom-deposits': 'Vodacom Deposits', 'withdrawal-requests': 'Maombi ya Kutoa Pesa', reports: 'Ripoti za Watumiaji', support: 'Msaada', sms: 'SMS Bulk', users: 'Watumiaji', 'match-api': 'API', matches: 'Mechi', 'two-up-markets': '2UP Markets', aviator: 'Aviator', dice: 'Dice', zungusha: 'Zungusha Shinda', penalty: 'Penalty Casino', jackpots: 'Jackpots', 'casino-budget': 'Bajeti Casino', banners: 'Banners', bets: 'Bets', notifications: 'Notifications', announcements: 'Matangazo', 'wallet-audit': 'Wallet Audit', audit: 'Audit & Fraud', account: 'Akaunti & Futa', admins: 'Simamia Admin', settings: 'Settings' },
+  mines: {
+    title: 'Mines', fair: 'Seva inaweka migodi kwenye gridi ya 5×5 kabla ya kubofya. Huoni zilipo mpaka mchezo umalizike. Kila almasi inapandisha kizidishi. Toa pesa kabla ya kugusa mgodi.',
+    house: 'Bajeti imewashwa. Inahesabu dau na malipo, na kiwango cha hasara kinaonekana kwa msimamizi. Migodi bado inawekwa kwa bahati sawa, kama generateMines ya PesaBetPro.',
+    count: 'Migodi', stake: 'Kiasi (TZS)', multiplier: 'Kizidishi', start: 'Anza', starting: 'Inaanza…', login: 'Ingia ili kucheza', cashout: 'Toa pesa',
+    prompt: 'Chagua idadi ya migodi na kiasi, kisha anza.', win: 'Umeshinda', loss: 'Umeshindwa', history: 'Historia', noHistory: 'Hakuna mchezo bado.',
+    err_insufficient_funds: 'Salio haitoshi.', err_game_disabled: 'Mchezo umezimwa.', err_validation: 'Angalia idadi ya migodi na kiasi.', err_unauthenticated: 'Ingia kwanza.', err_active_game: 'Maliza mchezo ulio wazi kwanza.', err_too_early: 'Gusa almasi moja kabla ya kutoa pesa.', err_bet_closed: 'Mchezo huu umeshamalizika.', err_generic: 'Imeshindikana. Jaribu tena.',
+    adminHelp: 'RTP ni sehemu ya elfu kumi. 9700 ni asilimia 97, sawa na 0.97 ya PesaBetPro. Migodi inawekwa na seva. Bajeti inahesabu dau na malipo; generateMines haibadilishi nafasi za migodi.',
+    adminSaved: 'Mipangilio ya Mines imehifadhiwa.', adminEnabled: 'Imewashwa', adminMin: 'Dau la chini', adminMax: 'Dau la juu', adminMaxWin: 'Ushindi wa juu', adminBets: 'Dau', adminPayouts: 'Malipo', adminProfit: 'Faida',
+    budgetTitle: 'Tumia Bajeti — Mines', budgetOn: 'ON: Mchezo unatumia bajeti uliyoweka (loss rate inaonyeshwa, payout cap inaonyeshwa). Nafasi za migodi zinabaki za bahati sawa.', budgetOff: 'OFF: Mchezo unacheza kawaida bila kikomo cha bajeti.',
+    budgetRemaining: 'Bajeti iliyobaki', budgetAmount: 'Bajeti', budgetLoss: 'Loss rate', budgetCap: 'Kikomo cha malipo (55%)', budgetCapHit: 'Kikomo kimefikiwa', budgetSet: 'Weka bajeti mpya', budgetSave: 'Hifadhi bajeti', budgetReset: 'Rejesha 0', budgetSaved: 'Bajeti ya Mines imehifadhiwa.',
+    health_good: 'Afya Nzuri', health_normal: 'Kawaida', health_caution: 'Tahadhari', health_recovery: 'Recovery Mode', health_danger: 'Hatari',
+  },
+  adminNav: { overview: 'Overview', transactions: 'Miamala', 'payment-api': 'API za Malipo', 'speedpesa-logs': 'SpeedPesa Logs', 'vodacom-deposits': 'Vodacom Deposits', 'withdrawal-requests': 'Maombi ya Kutoa Pesa', reports: 'Ripoti za Watumiaji', support: 'Msaada', sms: 'SMS Bulk', users: 'Watumiaji', 'match-api': 'API', matches: 'Mechi', 'two-up-markets': '2UP Markets', aviator: 'Aviator', dice: 'Dice', mines: 'Mines', zungusha: 'Zungusha Shinda', penalty: 'Penalty Casino', jackpots: 'Jackpots', 'casino-budget': 'Bajeti Casino', banners: 'Banners', bets: 'Bets', notifications: 'Notifications', announcements: 'Matangazo', 'wallet-audit': 'Wallet Audit', audit: 'Audit & Fraud', account: 'Akaunti & Futa', admins: 'Simamia Admin', settings: 'Settings' },
 }
 
 const en = {
@@ -91,7 +103,19 @@ const en = {
     budgetRemaining: 'Budget remaining', budgetAmount: 'Budget', budgetLoss: 'Loss rate', budgetCap: 'Payout cap (55%)', budgetCapHit: 'Cap reached', budgetSet: 'Set a new budget', budgetSave: 'Save budget', budgetReset: 'Reset to 0', budgetSaved: 'Dice budget saved.',
     health_good: 'Healthy', health_normal: 'Normal', health_caution: 'Caution', health_recovery: 'Recovery mode', health_danger: 'Danger',
   },
-  adminNav: { overview: 'Overview', transactions: 'Transactions', 'payment-api': 'Payment APIs', 'speedpesa-logs': 'SpeedPesa Logs', 'vodacom-deposits': 'Vodacom Deposits', 'withdrawal-requests': 'Withdrawal requests', reports: 'User reports', support: 'Support', sms: 'SMS bulk', users: 'Users', 'match-api': 'Match API', matches: 'Matches', 'two-up-markets': '2UP Markets', aviator: 'Aviator', dice: 'Dice', zungusha: 'Spin and win', penalty: 'Penalty casino', jackpots: 'Jackpots', 'casino-budget': 'Casino budget', banners: 'Banners', bets: 'Bets', notifications: 'Notifications', announcements: 'Announcements', 'wallet-audit': 'Wallet audit', audit: 'Audit and fraud', account: 'Accounts', admins: 'Manage admins', settings: 'Settings' },
+  mines: {
+    title: 'Mines', fair: 'The server places the mines on a 5×5 grid before you click. You do not see them until the round ends. Each gem raises the multiplier. Cash out before you hit a mine.',
+    house: 'The budget is on. It counts stakes and payouts, and the admin can see the loss rate. Mine positions stay a uniform draw, the same as PesaBetPro generateMines.',
+    count: 'Mines', stake: 'Stake (TZS)', multiplier: 'Multiplier', start: 'Start', starting: 'Starting…', login: 'Log in to play', cashout: 'Cash out',
+    prompt: 'Pick how many mines and a stake, then start.', win: 'You win', loss: 'You lose', history: 'History', noHistory: 'No games yet.',
+    err_insufficient_funds: 'Not enough balance.', err_game_disabled: 'The game is switched off.', err_validation: 'Check the mine count and the stake.', err_unauthenticated: 'Log in first.', err_active_game: 'Finish the open game first.', err_too_early: 'Reveal one gem before you cash out.', err_bet_closed: 'That game is already over.', err_generic: 'Something went wrong. Try again.',
+    adminHelp: 'RTP is in basis points. 9700 is 97 percent, the same 0.97 factor PesaBetPro used. The server places the mines. The budget counts stakes and payouts; generateMines does not move them.',
+    adminSaved: 'Mines settings saved.', adminEnabled: 'Enabled', adminMin: 'Minimum stake', adminMax: 'Maximum stake', adminMaxWin: 'Maximum win', adminBets: 'Bets', adminPayouts: 'Payouts', adminProfit: 'Profit',
+    budgetTitle: 'Use budget — Mines', budgetOn: 'ON: The game uses the budget you set (the loss rate and the payout cap are shown). Mine positions stay a uniform draw.', budgetOff: 'OFF: The game plays normally, with no budget limit.',
+    budgetRemaining: 'Budget remaining', budgetAmount: 'Budget', budgetLoss: 'Loss rate', budgetCap: 'Payout cap (55%)', budgetCapHit: 'Cap reached', budgetSet: 'Set a new budget', budgetSave: 'Save budget', budgetReset: 'Reset to 0', budgetSaved: 'Mines budget saved.',
+    health_good: 'Healthy', health_normal: 'Normal', health_caution: 'Caution', health_recovery: 'Recovery mode', health_danger: 'Danger',
+  },
+  adminNav: { overview: 'Overview', transactions: 'Transactions', 'payment-api': 'Payment APIs', 'speedpesa-logs': 'SpeedPesa Logs', 'vodacom-deposits': 'Vodacom Deposits', 'withdrawal-requests': 'Withdrawal requests', reports: 'User reports', support: 'Support', sms: 'SMS bulk', users: 'Users', 'match-api': 'Match API', matches: 'Matches', 'two-up-markets': '2UP Markets', aviator: 'Aviator', dice: 'Dice', mines: 'Mines', zungusha: 'Spin and win', penalty: 'Penalty casino', jackpots: 'Jackpots', 'casino-budget': 'Casino budget', banners: 'Banners', bets: 'Bets', notifications: 'Notifications', announcements: 'Announcements', 'wallet-audit': 'Wallet audit', audit: 'Audit and fraud', account: 'Accounts', admins: 'Manage admins', settings: 'Settings' },
 }
 
 export const i18n = createI18n({
