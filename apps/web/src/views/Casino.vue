@@ -6,6 +6,7 @@ import { casinoGames } from '../data/mock'
   <div class="grid">
     <RouterLink to="/dice" class="tile" data-testid="casino-dice"><h3>Dice</h3><p>1–100</p></RouterLink>
     <RouterLink to="/mines" class="tile" data-testid="casino-mines"><h3>Mines</h3><p>5×5</p></RouterLink>
+    <RouterLink to="/mayan" class="tile" data-testid="casino-mayan"><h3>Mayan Gold</h3><p>24</p></RouterLink>
     <div class="tile" v-for="g in casinoGames.filter((name) => name !== 'Mines')" :key="g">{{ g }}<br/><button type="button">Play (mock, demo balance)</button></div>
   </div>
 </template>

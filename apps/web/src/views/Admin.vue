@@ -6,26 +6,27 @@ import AdminAviator from '../components/AdminAviator.vue'
 import AdminJackpots from '../components/AdminJackpots.vue'
 import AdminDice from '../components/AdminDice.vue'
 import AdminMines from '../components/AdminMines.vue'
+import AdminMayan from '../components/AdminMayan.vue'
 import { ApiClientError, api } from '../api'
 import { useAuth } from '../stores/store'
 
 type SectionId =
   | 'overview' | 'transactions' | 'payment-api' | 'speedpesa-logs' | 'vodacom-deposits'
   | 'withdrawal-requests' | 'reports' | 'support' | 'sms' | 'users' | 'match-api' | 'matches'
-  | 'two-up-markets' | 'aviator' | 'dice' | 'mines' | 'zungusha' | 'penalty' | 'jackpots' | 'casino-budget'
+  | 'two-up-markets' | 'aviator' | 'dice' | 'mines' | 'mayan' | 'zungusha' | 'penalty' | 'jackpots' | 'casino-budget'
   | 'banners' | 'bets' | 'notifications' | 'announcements' | 'wallet-audit' | 'audit'
   | 'account' | 'admins' | 'settings'
 
 const ready = new Set<SectionId>([
   'overview', 'users', 'banners', 'notifications', 'announcements',
   'wallet-audit', 'audit', 'account', 'admins', 'settings',
-  'match-api', 'matches', 'bets', 'two-up-markets', 'aviator', 'dice', 'mines', 'jackpots',
+  'match-api', 'matches', 'bets', 'two-up-markets', 'aviator', 'dice', 'mines', 'mayan', 'jackpots',
 ])
 
 const menu: SectionId[] = [
   'overview', 'transactions', 'payment-api', 'speedpesa-logs', 'vodacom-deposits',
   'withdrawal-requests', 'reports', 'support', 'sms', 'users', 'match-api', 'matches',
-  'two-up-markets', 'aviator', 'dice', 'mines', 'zungusha', 'penalty', 'jackpots', 'casino-budget',
+  'two-up-markets', 'aviator', 'dice', 'mines', 'mayan', 'zungusha', 'penalty', 'jackpots', 'casino-budget',
   'banners', 'bets', 'notifications', 'announcements', 'wallet-audit', 'audit',
   'account', 'admins', 'settings',
 ]
@@ -890,6 +891,10 @@ async function deleteNote(id: string) {
 
     <section v-else-if="section === 'mines'">
       <AdminMines />
+    </section>
+
+    <section v-else-if="section === 'mayan'">
+      <AdminMayan />
     </section>
 
     <section v-else-if="section === 'notifications'" data-testid="admin-notifications">
