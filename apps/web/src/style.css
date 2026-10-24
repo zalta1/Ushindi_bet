@@ -221,8 +221,8 @@ button.av-cash{width:100%;background:var(--gold);color:#10201a;font-weight:800;b
 .dice-board input[type=range]{width:100%}
 .dice-budget{margin-top:16px}
 .jackpot-form input[type=checkbox]{width:auto}
-.layout.dice-route,.layout.mines-route,.layout.mayan-route{grid-template-columns:240px minmax(0,1fr)}
-.layout.dice-route.collapsed,.layout.mines-route.collapsed,.layout.mayan-route.collapsed{grid-template-columns:0 minmax(0,1fr)}
+.layout.dice-route,.layout.mines-route,.layout.mayan-route,.layout.penalty-route{grid-template-columns:240px minmax(0,1fr)}
+.layout.dice-route.collapsed,.layout.mines-route.collapsed,.layout.mayan-route.collapsed,.layout.penalty-route.collapsed{grid-template-columns:0 minmax(0,1fr)}
 .mines{max-width:720px}
 .mines-board{text-align:center}
 .mines-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;max-width:420px;margin:12px auto}
@@ -257,8 +257,23 @@ button.av-cash{width:100%;background:var(--gold);color:#10201a;font-weight:800;b
 .mayan-board select{width:auto;background:#78350f;color:#f6e7b2;border:1px solid rgba(217,119,6,.45);border-radius:8px;padding:8px}
 .mayan-board .win{color:#facc15;font-weight:900}
 .mayan-board .loss{color:#ff8a8a;font-weight:800}
+.penalty{max-width:960px}
+.penalty-stage{position:relative;height:min(70vh,640px);min-height:340px;background:#070b14;border-radius:16px;overflow:hidden;padding:0}
+.penalty-stage canvas{width:100%;height:100%;display:block;touch-action:none}
+.penalty-zones{position:absolute;inset:0;pointer-events:none}
+.penalty-zone{position:absolute;width:48px;height:48px;margin:0;padding:0;border-radius:50%;border:2px solid rgba(255,255,255,.9);background:rgba(8,12,20,.5);color:#fff;font-size:12px;font-weight:800;transform:translate(-50%,-50%);pointer-events:auto}
+.penalty-zone.on{border-color:#f5d76e;background:rgba(245,215,110,.55);color:#111}
+.penalty-overlay{position:absolute;left:50%;top:8%;transform:translateX(-50%);background:rgba(0,0,0,.72);border-radius:14px;padding:12px 18px;text-align:center;pointer-events:none;display:flex;flex-direction:column;gap:4px;min-width:140px}
+.penalty-overlay.goal{color:#f6e27a}
+.penalty-overlay.saved,.penalty-overlay.miss{color:#ffb4b4}
+.penalty-controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:12px}
+.penalty-controls input{width:140px}
+.penalty-shoot{min-height:48px;padding:0 22px;border-radius:999px;background:#f5d76e;color:#111;font-weight:800;margin-top:8px}
+.penalty-zones-form{display:grid;gap:8px;margin-top:12px}
+.penalty-zones-form .card{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;align-items:end}
 @media(max-width:900px){
-  .layout.dice-route,.layout.dice-route.collapsed,.layout.mines-route,.layout.mines-route.collapsed,.layout.mayan-route,.layout.mayan-route.collapsed{grid-template-columns:1fr}
+  .layout.dice-route,.layout.dice-route.collapsed,.layout.mines-route,.layout.mines-route.collapsed,.layout.mayan-route,.layout.mayan-route.collapsed,.layout.penalty-route,.layout.penalty-route.collapsed{grid-template-columns:1fr}
+  .penalty-zone{width:42px;height:42px;font-size:11px}
   .dice-roll{font-size:64px}
   .mines-cell{min-height:44px;font-size:18px}
   .mayan-target{min-height:64px;padding:6px 2px}
