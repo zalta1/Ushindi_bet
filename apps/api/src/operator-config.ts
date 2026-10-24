@@ -48,6 +48,11 @@ export const operatorConfig = {
   aviatorMaxWin: 10_000_000,
   aviatorBettingMs: 5000,
   aviatorCrashedMs: 5000,
+  diceEnabled: true,
+  diceRtpBps: 9700,
+  diceMinStake: 100,
+  diceMaxStake: 2_000_000,
+  diceMaxWin: 10_000_000,
   currency: 'TZS' as const,
 }
 
@@ -75,6 +80,10 @@ export const INT_SETTING_KEYS = [
   'aviatorMaxWin',
   'aviatorBettingMs',
   'aviatorCrashedMs',
+  'diceRtpBps',
+  'diceMinStake',
+  'diceMaxStake',
+  'diceMaxWin',
 ] as const
 
 export const BOOL_SETTING_KEYS = [
@@ -86,6 +95,7 @@ export const BOOL_SETTING_KEYS = [
   'welcomeBonusEnabled',
   'maintenanceMode',
   'aviatorEnabled',
+  'diceEnabled',
 ] as const
 
 export type IntSettingKey = (typeof INT_SETTING_KEYS)[number]

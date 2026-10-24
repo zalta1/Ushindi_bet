@@ -4,26 +4,27 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import AdminAviator from '../components/AdminAviator.vue'
 import AdminJackpots from '../components/AdminJackpots.vue'
+import AdminDice from '../components/AdminDice.vue'
 import { ApiClientError, api } from '../api'
 import { useAuth } from '../stores/store'
 
 type SectionId =
   | 'overview' | 'transactions' | 'payment-api' | 'speedpesa-logs' | 'vodacom-deposits'
   | 'withdrawal-requests' | 'reports' | 'support' | 'sms' | 'users' | 'match-api' | 'matches'
-  | 'two-up-markets' | 'aviator' | 'zungusha' | 'penalty' | 'jackpots' | 'casino-budget'
+  | 'two-up-markets' | 'aviator' | 'dice' | 'zungusha' | 'penalty' | 'jackpots' | 'casino-budget'
   | 'banners' | 'bets' | 'notifications' | 'announcements' | 'wallet-audit' | 'audit'
   | 'account' | 'admins' | 'settings'
 
 const ready = new Set<SectionId>([
   'overview', 'users', 'banners', 'notifications', 'announcements',
   'wallet-audit', 'audit', 'account', 'admins', 'settings',
-  'match-api', 'matches', 'bets', 'two-up-markets', 'aviator', 'jackpots',
+  'match-api', 'matches', 'bets', 'two-up-markets', 'aviator', 'dice', 'jackpots',
 ])
 
 const menu: SectionId[] = [
   'overview', 'transactions', 'payment-api', 'speedpesa-logs', 'vodacom-deposits',
   'withdrawal-requests', 'reports', 'support', 'sms', 'users', 'match-api', 'matches',
-  'two-up-markets', 'aviator', 'zungusha', 'penalty', 'jackpots', 'casino-budget',
+  'two-up-markets', 'aviator', 'dice', 'zungusha', 'penalty', 'jackpots', 'casino-budget',
   'banners', 'bets', 'notifications', 'announcements', 'wallet-audit', 'audit',
   'account', 'admins', 'settings',
 ]
@@ -880,6 +881,10 @@ async function deleteNote(id: string) {
 
     <section v-else-if="section === 'jackpots'">
       <AdminJackpots />
+    </section>
+
+    <section v-else-if="section === 'dice'">
+      <AdminDice />
     </section>
 
     <section v-else-if="section === 'notifications'" data-testid="admin-notifications">

@@ -211,3 +211,19 @@ button.av-cash{width:100%;background:var(--gold);color:#10201a;font-weight:800;b
 @media(max-width:900px){
   .jackpot-match,.jackpot-form{grid-template-columns:minmax(0,1fr)}
 }
+
+.dice{max-width:720px}
+.dice-board{text-align:center}
+.dice-roll{font-size:88px;font-weight:900;line-height:1;margin:8px 0;font-variant-numeric:tabular-nums}
+.dice-roll.win{color:var(--accent)}
+.dice-roll.loss{color:#ff5a5a}
+.dice-hash,.dice-reveal{word-break:break-all;font-size:12px}
+.dice-board input[type=range]{width:100%}
+.dice-budget{margin-top:16px}
+.jackpot-form input[type=checkbox]{width:auto}
+.layout.dice-route{grid-template-columns:240px minmax(0,1fr)}
+.layout.dice-route.collapsed{grid-template-columns:0 minmax(0,1fr)}
+@media(max-width:900px){
+  .layout.dice-route,.layout.dice-route.collapsed{grid-template-columns:1fr}
+  .dice-roll{font-size:64px}
+}
