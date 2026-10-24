@@ -10,7 +10,8 @@ import Match from './views/Match.vue'
 import Jackpots from './views/Jackpots.vue'
 import Virtuals from './views/Virtuals.vue'
 import Casino from './views/Casino.vue'
-import Crash from './views/Crash.vue'
+import Aviator from './views/Aviator.vue'
+import AviatorFair from './views/AviatorFair.vue'
 import Promotions from './views/Promotions.vue'
 import Search from './views/Search.vue'
 import Auth from './views/Auth.vue'
@@ -33,7 +34,9 @@ const routes = [
   { path: '/jackpots', component: Jackpots },
   { path: '/virtuals', component: Virtuals },
   { path: '/casino', component: Casino },
-  { path: '/crash', component: Crash },
+  { path: '/aviator', component: Aviator },
+  { path: '/aviator/fair', component: AviatorFair },
+  { path: '/crash', redirect: '/aviator' },
   { path: '/promotions', component: Promotions },
   { path: '/search', component: Search },
   { path: '/login', component: Auth },

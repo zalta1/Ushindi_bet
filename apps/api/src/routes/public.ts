@@ -65,15 +65,9 @@ export class MockLicensedFeedAdapter implements OddsFeedAdapter {
 
 const audit: unknown[] = [{ actor: 'system', action: 'boot', at: new Date().toISOString() }]
 
-let nonce = 0
-let serverSeed = crypto.randomBytes(32).toString('hex')
-let currentHash = crypto.createHash('sha256').update(serverSeed).digest('hex')
-
-function crashPoint(seed: string, client: string, n: number) {
-  const h = crypto.createHmac('sha256', seed).update(`${client}:${n}`).digest('hex')
-  const r = parseInt(h.slice(0, 13), 16) / 2 ** 52
-  if (parseInt(h.slice(0, 8), 16) % 33 === 0) return 1
-  return Math.min(100, Math.max(1, +(0.97 / (1 - r)).toFixed(2)))
+function crashSandboxGone(req: FastifyRequest) {
+  if (!req.auth) throw new ApiError(401, 'unauthenticated')
+  throw new ApiError(410, 'gone')
 }
 
 export const sportsList = [
@@ -111,30 +105,11 @@ function requireSession(req: FastifyRequest) {
 }
 
 export function registerPublicRoutes(app: FastifyInstance) {
-  app.get('/api/crash/current', async () => ({ serverSeedHash: currentHash, nonce, rtp: 0.97, publishedRtp: '97%' }))
+  app.get('/api/crash/current', async (req) => {
+    crashSandboxGone(req)
+  })
   app.post('/api/crash/start', async (req) => {
-    requireSandboxAdmin(req)
-    const body = (req.body ?? {}) as { clientSeed?: string; cashOutAt?: number }
-    const clientSeed = body.clientSeed ?? 'ushindi'
-    const mult = crashPoint(serverSeed, clientSeed, nonce)
-    const revealed = serverSeed
-    const hash = currentHash
-    const n = nonce
-    serverSeed = crypto.randomBytes(32).toString('hex')
-    currentHash = crypto.createHash('sha256').update(serverSeed).digest('hex')
-    nonce += 1
-    return {
-      crashMultiplier: mult,
-      cashedOut: Boolean(body.cashOutAt && body.cashOutAt <= mult),
-      payoutMultiplier: body.cashOutAt && body.cashOutAt <= mult ? body.cashOutAt : 0,
-      verify: {
-        serverSeed: revealed,
-        serverSeedHash: hash,
-        clientSeed,
-        nonce: n,
-        algorithm: 'HMAC_SHA256(serverSeed, clientSeed:nonce) -> max(1,0.97/(1-r)) cap 100x',
-      },
-    }
+    crashSandboxGone(req)
   })
   app.post('/api/payments/:kind', async (req) => {
     requireSandboxAdmin(req)

@@ -34,6 +34,7 @@ function schemaFields(issues: SchemaIssue[]) {
 }
 import { warmPasswordHasher } from './passwords.js'
 import { registerDepositRoutes } from './deposits/routes.js'
+import { registerAviatorRoutes } from './aviator/routes.js'
 import { registerPublicRoutes } from './routes/public.js'
 import { registerSportsRoutes } from './sports/routes.js'
 
@@ -170,6 +171,7 @@ export async function buildApp(overrides: Partial<AppConfig> = {}): Promise<Fast
   })
 
   registerPublicRoutes(app)
+  registerAviatorRoutes(app, cfg)
   registerSportsRoutes(app, cfg)
   registerAuthRoutes(app, cfg)
   registerDepositRoutes(app, cfg)

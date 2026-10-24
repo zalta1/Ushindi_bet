@@ -40,6 +40,14 @@ export const operatorConfig = {
   securityUnlockTzs: 0,
   agentWhatsapp: '',
   maintenanceMode: false,
+  aviatorEnabled: true,
+  aviatorRtpBps: 9600,
+  aviatorMaxMultiplier: 1000,
+  aviatorMinStake: 100,
+  aviatorMaxStake: 2_000_000,
+  aviatorMaxWin: 10_000_000,
+  aviatorBettingMs: 5000,
+  aviatorCrashedMs: 5000,
   currency: 'TZS' as const,
 }
 
@@ -60,6 +68,13 @@ export const INT_SETTING_KEYS = [
   'feedSyncIntervalSec',
   'liveOddsIntervalSec',
   'lifecycleIntervalSec',
+  'aviatorRtpBps',
+  'aviatorMaxMultiplier',
+  'aviatorMinStake',
+  'aviatorMaxStake',
+  'aviatorMaxWin',
+  'aviatorBettingMs',
+  'aviatorCrashedMs',
 ] as const
 
 export const BOOL_SETTING_KEYS = [
@@ -70,6 +85,7 @@ export const BOOL_SETTING_KEYS = [
   'hotMatchesAuto',
   'welcomeBonusEnabled',
   'maintenanceMode',
+  'aviatorEnabled',
 ] as const
 
 export type IntSettingKey = (typeof INT_SETTING_KEYS)[number]

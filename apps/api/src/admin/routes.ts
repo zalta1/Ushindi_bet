@@ -5,6 +5,7 @@ import type { AppConfig } from '../config.js'
 import { getPool, withTx } from '../db.js'
 import { ApiError, money } from '../errors.js'
 import { normalizeTzPhone } from '../identity.js'
+import { assertAviatorRanges } from '../aviator/settings.js'
 import { BOOL_SETTING_KEYS, INT_SETTING_KEYS, operatorConfig } from '../operator-config.js'
 import { assertCsrf, assertOrigin, beginImpersonation } from '../auth/sessions.js'
 import { isAdminRole, isAccountRole, permissionsFor } from './roles.js'
@@ -177,6 +178,7 @@ export function registerAdminRoutes(app: FastifyInstance, cfg: AppConfig) {
     if (next.payoutPercentBps < 1 || next.payoutPercentBps > 10000) {
       throw new ApiError(400, 'validation', { fields: { payoutPercentBps: 'range' } })
     }
+    assertAviatorRanges(next)
     if (next.rtpBps < 9000 || next.rtpBps > 10000) throw new ApiError(400, 'validation', { fields: { rtpBps: 'range' } })
     for (const key of ['feedSyncIntervalSec', 'liveOddsIntervalSec', 'lifecycleIntervalSec'] as const) {
       if (next[key] < 15 || next[key] > 86_400) throw new ApiError(400, 'validation', { fields: { [key]: 'range' } })
