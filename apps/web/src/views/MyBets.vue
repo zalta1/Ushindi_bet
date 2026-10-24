@@ -10,6 +10,7 @@ type Bet = {
   stakeTzs: number
   combinedOdds: number
   potentialPayoutTzs: number
+  payoutPercentBps: number
   status: string
   placedAt: string
   cashoutTzs: number | null
@@ -69,7 +70,8 @@ watch(tab, load)
   <p v-else-if="error">{{ $t('errGeneric') }}</p>
   <div class="card" v-for="bet in bets" :key="bet.id" data-testid="my-bet">
     <b>{{ bet.status }}</b> · {{ $t('stake') }} {{ fmt(bet.stakeTzs) }} @ {{ bet.combinedOdds.toFixed(2) }}
-    → {{ $t('potential') }} {{ fmt(bet.potentialPayoutTzs) }}
+    → {{ $t('potential') }} <b data-testid="bet-payout">{{ fmt(bet.potentialPayoutTzs) }}</b>
+    <span v-if="bet.payoutPercentBps < 10000" class="muted"> · {{ $t('payoutRate', { n: (bet.payoutPercentBps / 100).toFixed(0) }) }}</span>
     <div v-for="(leg, i) in bet.legs" :key="i">{{ leg.match }} · {{ leg.market }} {{ leg.selection }} @ {{ leg.odds.toFixed(2) }} · {{ leg.status }}</div>
     <button v-if="tab === 'open' && bet.cashoutTzs" type="button" data-testid="cashout-button" @click="cashOut(bet)">{{ $t('cashout', { n: fmt(bet.cashoutTzs) }) }}</button>
     <p v-else-if="tab === 'open'" class="muted">{{ $t('cashoutNone') }}</p>

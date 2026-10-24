@@ -55,6 +55,7 @@ beforeEach(async () => {
     withdrawalsEnabled: true,
     cashoutEnabled: false,
     cashoutMarginBps: 1200,
+    payoutPercentBps: 8800,
     feedSyncEnabled: false,
     lifecycleEnabled: false,
     hotMatchesAuto: false,

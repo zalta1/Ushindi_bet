@@ -117,11 +117,12 @@ test('place_bet_atomic debits the stake and prices the payout from the legs', as
     { match_id: 1, market: '1X2', selection: '1', odds: 2 },
     { market: 'BTTS', selection: 'Yes', odds: 1.5 },
   ]
-  const placed = await pool.query<{ result: { idempotent: boolean; potential_payout_tzs: number; balance_tzs: number; bet_id: string } }>(
+  const placed = await pool.query<{ result: { idempotent: boolean; potential_payout_tzs: number; payout_percent_bps: number; balance_tzs: number; bet_id: string } }>(
     `SELECT place_bet_atomic($1, $2, $3::jsonb, $4) AS result`,
     [userId, 1000, JSON.stringify(legs), 'bet-key-0000001'],
   )
-  assert.equal(Number(placed.rows[0].result.potential_payout_tzs), 3000)
+  assert.equal(Number(placed.rows[0].result.potential_payout_tzs), 2640)
+  assert.equal(Number(placed.rows[0].result.payout_percent_bps), 8800)
   assert.equal(Number(placed.rows[0].result.balance_tzs), 9000)
   const replay = await pool.query<{ result: { idempotent: boolean; bet_id: string; balance_tzs: number } }>(
     `SELECT place_bet_atomic($1, $2, $3::jsonb, $4) AS result`,

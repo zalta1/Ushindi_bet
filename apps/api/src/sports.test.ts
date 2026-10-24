@@ -63,6 +63,7 @@ beforeEach(async () => {
     withdrawalsEnabled: true,
     cashoutEnabled: false,
     cashoutMarginBps: 1200,
+    payoutPercentBps: 8800,
     feedSyncEnabled: false,
     lifecycleEnabled: false,
     hotMatchesAuto: false,
@@ -172,6 +173,11 @@ test('public matches come from Postgres and include odds ids', async () => {
   const limits = await app.inject({ method: 'GET', url: '/api/bets/limits' })
   assert.equal(limits.statusCode, 200)
   assert.equal(limits.json().minStake, 500)
+  assert.equal(limits.json().payoutPercentBps, 8800)
+  const quote = await app.inject({ method: 'GET', url: '/api/bets/quote?stake=1000&price=2&price=1.5' })
+  assert.equal(quote.statusCode, 200)
+  assert.equal(quote.json().potentialPayoutTzs, 2640)
+  assert.equal(quote.json().payoutPercentBps, 8800)
 })
 
 test('sync without an API-Football key does not call the feed', async () => {
@@ -193,7 +199,8 @@ test('placement rechecks odds, debits the ledger, and replays the same key', asy
   const before = await balanceOf(player.client)
   const placed = await place(player.client, [{ oddsId: match.oddsId, price: match.price }], 1000, 'sports-place-0001')
   assert.equal(placed.status, 200, JSON.stringify(placed.json))
-  assert.equal(placed.json.potentialPayoutTzs, 2000)
+  assert.equal(placed.json.potentialPayoutTzs, 1760)
+  assert.equal(placed.json.payoutPercentBps, 8800)
   assert.equal(placed.json.balanceTzs, before - 1000)
   const replay = await place(player.client, [{ oddsId: match.oddsId, price: match.price }], 1000, 'sports-place-0001')
   assert.equal(replay.status, 200)
@@ -230,14 +237,14 @@ test('a winning settle credits once and a second settle does not', async () => {
   const settled = await admin.client.send('POST', `/api/admin/matches/${match.id}/settle`, { homeScore: 2, awayScore: 0 })
   assert.equal(settled.status, 200, JSON.stringify(settled.json))
   assert.equal(settled.json.alreadySettled, false)
-  assert.equal(settled.json.creditedTzs, 2000)
-  assert.equal(await balanceOf(player.client), afterStake + 2000)
+  assert.equal(settled.json.creditedTzs, 1760)
+  assert.equal(await balanceOf(player.client), afterStake + 1760)
 
   const again = await admin.client.send('POST', `/api/admin/matches/${match.id}/settle`, { homeScore: 2, awayScore: 0 })
   assert.equal(again.status, 200)
   assert.equal(again.json.alreadySettled, true)
   assert.equal(again.json.creditedTzs, 0)
-  assert.equal(await balanceOf(player.client), afterStake + 2000)
+  assert.equal(await balanceOf(player.client), afterStake + 1760)
   const wins = await pool.query<{ n: number }>(
     `SELECT count(*)::int AS n FROM ledger_entries WHERE user_id = $1 AND entry_type = 'bet_win'`,
     [player.id],
@@ -258,7 +265,7 @@ test('a winning settle credits once and a second settle does not', async () => {
   assert.equal(second.status, 200)
   const credited = [first, second].filter((row) => row.json.alreadySettled === false)
   assert.equal(credited.length, 1)
-  assert.equal(await balanceOf(player.client), beforeParallel + 3000)
+  assert.equal(await balanceOf(player.client), beforeParallel + 2640)
   const winRows = await pool.query<{ n: number }>(
     `SELECT count(*)::int AS n FROM ledger_entries WHERE user_id = $1 AND entry_type = 'bet_win'`,
     [player.id],
@@ -303,8 +310,8 @@ test('a losing result pays nothing and a void refunds the stake once', async () 
   const beforeOver = await balanceOf(player.client)
   const over = await admin.client.send('POST', `/api/admin/matches/${overMatch.id}/settle`, { homeScore: 2, awayScore: 1 })
   assert.equal(over.status, 200)
-  assert.equal(over.json.creditedTzs, 1900)
-  assert.equal(await balanceOf(player.client), beforeOver + 1900)
+  assert.equal(over.json.creditedTzs, 1672)
+  assert.equal(await balanceOf(player.client), beforeOver + 1672)
 })
 
 test('a multi loses on one lost leg and stays open until every leg is settled', async () => {
@@ -316,7 +323,7 @@ test('a multi loses on one lost leg and stays open until every leg is settled', 
     { oddsId: away.oddsId, price: 1.5 },
   ], 1000)
   assert.equal(openBet.status, 200)
-  assert.equal(openBet.json.potentialPayoutTzs, 3000)
+  assert.equal(openBet.json.potentialPayoutTzs, 2640)
   const afterStake = await balanceOf(player.client)
   const first = await admin.client.send('POST', `/api/admin/matches/${home.id}/settle`, { homeScore: 1, awayScore: 0 })
   assert.equal(first.json.creditedTzs, 0)
@@ -324,8 +331,8 @@ test('a multi loses on one lost leg and stays open until every leg is settled', 
   assert.equal(stillOpen.json.data.length, 1)
   assert.equal(await balanceOf(player.client), afterStake)
   const second = await admin.client.send('POST', `/api/admin/matches/${away.id}/settle`, { homeScore: 2, awayScore: 0 })
-  assert.equal(second.json.creditedTzs, 3000)
-  assert.equal(await balanceOf(player.client), afterStake + 3000)
+  assert.equal(second.json.creditedTzs, 2640)
+  assert.equal(await balanceOf(player.client), afterStake + 2640)
 
   const loseHome = await createMatch(admin.client, 'Testhome Multi C', 2)
   const loseAway = await createMatch(admin.client, 'Testhome Multi D', 2)
@@ -386,7 +393,7 @@ test('correct score, handicaps, draw no bet, and the other full-time markets set
   assert.equal(wonScore.status, 200)
   const settled = await admin.client.send('POST', `/api/admin/matches/${match.id}/settle`, { homeScore: 2, awayScore: 1 })
   assert.equal(settled.status, 200)
-  assert.equal(settled.json.creditedTzs, 8000)
+  assert.equal(settled.json.creditedTzs, 7040)
 
   const push = await createMatch(admin.client, 'Testhome Asian', 2)
   await addSelection(admin.client, push.id, '2-Way Handicap -1', 'Home -1', 1.9, -1)
@@ -405,7 +412,7 @@ test('correct score, handicaps, draw no bet, and the other full-time markets set
   const drawOdd = await addSelection(admin.client, three.id, '3-Way Handicap -1', 'Draw -1', 3.3, -1)
   await place(player.client, [{ oddsId: drawOdd, price: 3.3 }], 1000)
   const threeSettle = await admin.client.send('POST', `/api/admin/matches/${three.id}/settle`, { homeScore: 1, awayScore: 0 })
-  assert.equal(threeSettle.json.creditedTzs, 3300)
+  assert.equal(threeSettle.json.creditedTzs, 2904)
 
   const dnbMatch = await createMatch(admin.client, 'Testhome Dnb', 2)
   const dnbOdd = await addSelection(admin.client, dnbMatch.id, 'Draw No Bet', '1', 1.5)
@@ -418,12 +425,12 @@ test('correct score, handicaps, draw no bet, and the other full-time markets set
   const exactId = await addSelection(admin.client, goals.id, 'Exact Goals', '3+', 2.5)
   await place(player.client, [{ oddsId: oddId, price: 1.9 }], 1000)
   const oddSettle = await admin.client.send('POST', `/api/admin/matches/${goals.id}/settle`, { homeScore: 1, awayScore: 0 })
-  assert.equal(oddSettle.json.creditedTzs, 1900)
+  assert.equal(oddSettle.json.creditedTzs, 1672)
   const many = await createMatch(admin.client, 'Testhome Exact', 2)
   const manyId = await addSelection(admin.client, many.id, 'Exact Goals', '3+', 2.5)
   await place(player.client, [{ oddsId: manyId, price: 2.5 }], 1000)
   const manySettle = await admin.client.send('POST', `/api/admin/matches/${many.id}/settle`, { homeScore: 2, awayScore: 2 })
-  assert.equal(manySettle.json.creditedTzs, 2500)
+  assert.equal(manySettle.json.creditedTzs, 2200)
   assert.ok(homeH && asian && odd && exact && exactId)
 })
 
@@ -497,10 +504,10 @@ test('2UP pays a single early, does not pay twice, and a VAR reversal debits the
   const early = await admin.client.send('POST', `/api/admin/matches/${match.id}/score`, { homeScore: 2, awayScore: 0, minute: 30 })
   assert.equal(early.status, 200, JSON.stringify(early.json))
   assert.equal(early.json.paid, 1)
-  assert.equal(await balanceOf(player.client), afterStake + 2000)
+  assert.equal(await balanceOf(player.client), afterStake + 1760)
   const again = await admin.client.send('POST', `/api/admin/matches/${match.id}/score`, { homeScore: 2, awayScore: 0, minute: 40 })
   assert.equal(again.json.paid, 0)
-  assert.equal(await balanceOf(player.client), afterStake + 2000)
+  assert.equal(await balanceOf(player.client), afterStake + 1760)
   const reversed = await admin.client.send('POST', `/api/admin/matches/${match.id}/score`, { homeScore: 1, awayScore: 0, minute: 44 })
   assert.equal(reversed.json.reversed, 1)
   assert.equal(await balanceOf(player.client), afterStake)
@@ -511,7 +518,68 @@ test('2UP pays a single early, does not pay twice, and a VAR reversal debits the
   assert.equal(notEarly.json.paid, 1)
   const mine = await player.client.send('GET', '/api/bets?status=open')
   assert.ok(mine.json.data.some((bet: { legs: { selection: string }[] }) => bet.legs.some((leg) => leg.selection === 'X')))
-  assert.equal(await balanceOf(player.client), beforeDraw + 2000)
+  assert.equal(await balanceOf(player.client), beforeDraw + 1760)
+})
+
+test('a stored payout percent is unchanged when settings change, and a void leg still pays the reduced win', async () => {
+  const { player, admin } = await adminAndPlayer()
+  const first = await createMatch(admin.client, 'Testhome Percent', 2)
+  const placed = await place(player.client, [{ oddsId: first.oddsId, price: 2 }], 1000)
+  assert.equal(placed.json.potentialPayoutTzs, 1760)
+  assert.equal(placed.json.payoutPercentBps, 8800)
+  const stored = await pool.query<{ payout_percent_bps: number; potential_payout_tzs: string }>(
+    `SELECT payout_percent_bps, potential_payout_tzs::text FROM bets WHERE id = $1`,
+    [placed.json.betId],
+  )
+  assert.equal(stored.rows[0].payout_percent_bps, 8800)
+  const rejected = await admin.client.send('PATCH', '/api/admin/config', { payoutPercentBps: 0 })
+  assert.equal(rejected.status, 400)
+  const changed = await admin.client.send('PATCH', '/api/admin/config', { payoutPercentBps: 7000 })
+  assert.equal(changed.status, 200, JSON.stringify(changed.json))
+  assert.equal(changed.json.payoutPercentBps, 7000)
+  const kept = await pool.query<{ payout_percent_bps: number }>(`SELECT payout_percent_bps FROM bets WHERE id = $1`, [placed.json.betId])
+  assert.equal(kept.rows[0].payout_percent_bps, 8800)
+  const afterStake = await balanceOf(player.client)
+  const settled = await admin.client.send('POST', `/api/admin/matches/${first.id}/settle`, { homeScore: 1, awayScore: 0 })
+  assert.equal(settled.json.creditedTzs, 1760)
+  assert.equal(await balanceOf(player.client), afterStake + 1760)
+
+  const later = await createMatch(admin.client, 'Testhome Later', 2)
+  const next = await place(player.client, [{ oddsId: later.oddsId, price: 2 }], 1000)
+  assert.equal(next.json.potentialPayoutTzs, 1400)
+  assert.equal(next.json.payoutPercentBps, 7000)
+
+  operatorConfig.payoutPercentBps = 8800
+  const home = await createMatch(admin.client, 'Testhome Voidleg A', 2)
+  const away = await createMatch(admin.client, 'Testhome Voidleg B', 1.5)
+  const multi = await place(player.client, [
+    { oddsId: home.oddsId, price: 2 },
+    { oddsId: away.oddsId, price: 1.5 },
+  ], 1000)
+  assert.equal(multi.json.potentialPayoutTzs, 2640)
+  await admin.client.send('POST', `/api/admin/matches/${home.id}/void`, { reason: 'mechi imeahirishwa' })
+  const before = await balanceOf(player.client)
+  const won = await admin.client.send('POST', `/api/admin/matches/${away.id}/settle`, { homeScore: 2, awayScore: 0 })
+  assert.equal(won.json.creditedTzs, 1320)
+  assert.equal(await balanceOf(player.client), before + 1320)
+})
+
+test('cashout never exceeds the win stored on the ticket', async () => {
+  const { player, admin } = await adminAndPlayer()
+  operatorConfig.cashoutEnabled = true
+  operatorConfig.cashoutMarginBps = 0
+  const match = await createMatch(admin.client, 'Testhome Cap', 2)
+  const placed = await place(player.client, [{ oddsId: match.oddsId, price: 2 }], 1000)
+  assert.equal(placed.json.potentialPayoutTzs, 1760)
+  await pool.query(`UPDATE odds SET price = 1.10 WHERE id = $1`, [match.oddsId])
+  const quote = await player.client.send('GET', `/api/bets/${placed.json.betId}/cashout`)
+  assert.equal(quote.status, 200, JSON.stringify(quote.json))
+  assert.equal(quote.json.cashoutTzs, 1760)
+  const before = await balanceOf(player.client)
+  const paid = await player.client.send('POST', `/api/bets/${placed.json.betId}/cashout`, { expectedTzs: 1760 })
+  assert.equal(paid.status, 200, JSON.stringify(paid.json))
+  assert.equal(paid.json.creditedTzs, 1760)
+  assert.equal(await balanceOf(player.client), before + 1760)
 })
 
 test('cashout recomputes on the server, credits once, and stops after settlement or suspension', async () => {

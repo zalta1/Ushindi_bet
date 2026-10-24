@@ -23,6 +23,9 @@ function dbError(err: unknown): ApiError | null {
   if (message.includes('invalid_idempotency_key')) return new ApiError(400, 'validation', { fields: { idempotencyKey: 'length' } })
   if (message.includes('unsupported_market')) return new ApiError(400, 'unsupported_market')
   if (message.includes('invalid_score')) return new ApiError(400, 'validation', { fields: { homeScore: 'invalid' } })
+  if (message.includes('invalid_payout_percent')) return new ApiError(400, 'validation', { fields: { payoutPercentBps: 'range' } })
+  if (message.includes('invalid_odds')) return new ApiError(400, 'validation', { fields: { price: 'invalid' } })
+  if (message.includes('invalid_stake')) return new ApiError(400, 'validation', { fields: { stake: 'invalid' } })
   if (message.includes('match_not_found') || message.includes('odds_not_found') || message.includes('bet_not_found')) return new ApiError(404, 'not_found')
   if (message.includes('cashout_changed')) return new ApiError(409, 'cashout_changed')
   if (message.includes('cashout_closed')) return new ApiError(409, 'cashout_closed')
@@ -137,7 +140,39 @@ export function registerSportsRoutes(app: FastifyInstance, cfg: AppConfig) {
     currency: 'TZS',
     cashoutEnabled: operatorConfig.cashoutEnabled,
     cashoutMarginBps: operatorConfig.cashoutMarginBps,
+    payoutPercentBps: operatorConfig.payoutPercentBps,
   }))
+
+  app.get('/api/bets/quote', async (req) => {
+    const query = req.query as { stake?: string; price?: string | string[] }
+    const stake = Number(query.stake)
+    if (!Number.isInteger(stake) || stake < 1 || stake > 100_000_000) {
+      throw new ApiError(400, 'validation', { fields: { stake: 'invalid' } })
+    }
+    const raw = query.price === undefined ? [] : Array.isArray(query.price) ? query.price : [query.price]
+    if (raw.length < 1 || raw.length > 20) throw new ApiError(400, 'validation', { fields: { price: 'invalid' } })
+    const prices = raw.map((value) => {
+      const n = Number(value)
+      if (!Number.isFinite(n) || n <= 1 || n > 1000) throw new ApiError(400, 'validation', { fields: { price: 'invalid' } })
+      return String(n)
+    })
+    try {
+      const { rows } = await getPool(cfg).query<{ result: { potential_payout_tzs: number | string; combined_odds: number | string; payout_percent_bps: number | string } }>(
+        `SELECT quote_bet($1, (SELECT COALESCE(array_agg(v::numeric), ARRAY[]::numeric[]) FROM unnest($2::text[]) AS v), $3) AS result`,
+        [stake, prices, operatorConfig.payoutPercentBps],
+      )
+      const result = rows[0].result
+      return {
+        potentialPayoutTzs: money(result.potential_payout_tzs),
+        combinedOdds: Number(result.combined_odds),
+        payoutPercentBps: Number(result.payout_percent_bps),
+      }
+    } catch (err) {
+      const mapped = dbError(err)
+      if (mapped) throw mapped
+      throw err
+    }
+  })
 
   app.get('/api/bets', async (req) => {
     if (!req.auth) throw new ApiError(401, 'unauthenticated')
@@ -150,11 +185,12 @@ export function registerSportsRoutes(app: FastifyInstance, cfg: AppConfig) {
       stake_tzs: string
       combined_odds: string
       potential_payout_tzs: string
+      payout_percent_bps: number | string
       status: string
       placed_at: Date
       settled_at: Date | null
     }>(
-      `SELECT id, stake_tzs, combined_odds, potential_payout_tzs, status, placed_at, settled_at
+      `SELECT id, stake_tzs, combined_odds, potential_payout_tzs, payout_percent_bps, status, placed_at, settled_at
          FROM bets
         WHERE user_id = $1 AND ($2::text IS NULL OR status = $2)
         ORDER BY placed_at DESC
@@ -226,8 +262,9 @@ export function registerSportsRoutes(app: FastifyInstance, cfg: AppConfig) {
       stake_tzs: string
       combined_odds: string
       potential_payout_tzs: string
+      payout_percent_bps: number | string
       status: string
-    }>(`SELECT id, user_id, stake_tzs, combined_odds, potential_payout_tzs, status FROM bets WHERE idempotency_key = $1`, [idempotencyKey])
+    }>(`SELECT id, user_id, stake_tzs, combined_odds, potential_payout_tzs, payout_percent_bps, status FROM bets WHERE idempotency_key = $1`, [idempotencyKey])
     if (existing.rows[0]) {
       const row = existing.rows[0]
       if (row.user_id !== userId || Number(row.stake_tzs) !== stakeTzs) throw new ApiError(409, 'idempotency_conflict')
@@ -238,6 +275,7 @@ export function registerSportsRoutes(app: FastifyInstance, cfg: AppConfig) {
         stakeTzs,
         combinedOdds: Number(row.combined_odds),
         potentialPayoutTzs: money(row.potential_payout_tzs),
+        payoutPercentBps: Number(row.payout_percent_bps),
         status: row.status,
         balanceTzs: money(balance.rows[0]?.balance_tzs),
       }
@@ -303,10 +341,11 @@ export function registerSportsRoutes(app: FastifyInstance, cfg: AppConfig) {
           stake_tzs: number | string
           combined_odds: number | string
           potential_payout_tzs: number | string
+          payout_percent_bps: number | string
           balance_tzs: number | string
         } }>(
-          `SELECT place_bet_atomic($1, $2, $3::jsonb, $4) AS result`,
-          [userId, stakeTzs, JSON.stringify(payload), idempotencyKey],
+          `SELECT place_bet_atomic($1, $2, $3::jsonb, $4, $5) AS result`,
+          [userId, stakeTzs, JSON.stringify(payload), idempotencyKey, operatorConfig.payoutPercentBps],
         )
         const result = placed.rows[0].result
         return {
@@ -315,6 +354,7 @@ export function registerSportsRoutes(app: FastifyInstance, cfg: AppConfig) {
           stakeTzs: money(result.stake_tzs),
           combinedOdds: Number(result.combined_odds),
           potentialPayoutTzs: money(result.potential_payout_tzs),
+          payoutPercentBps: Number(result.payout_percent_bps),
           status: 'open',
           balanceTzs: money(result.balance_tzs),
         }
@@ -725,11 +765,12 @@ export function registerSportsRoutes(app: FastifyInstance, cfg: AppConfig) {
       stake_tzs: string
       combined_odds: string
       potential_payout_tzs: string
+      payout_percent_bps: number | string
       status: string
       placed_at: Date
       settled_at: Date | null
     }>(
-      `SELECT b.id, u.phone, b.stake_tzs, b.combined_odds, b.potential_payout_tzs, b.status, b.placed_at, b.settled_at
+      `SELECT b.id, u.phone, b.stake_tzs, b.combined_odds, b.potential_payout_tzs, b.payout_percent_bps, b.status, b.placed_at, b.settled_at
          FROM bets b
          JOIN users u ON u.id = b.user_id
         WHERE ($1::text IS NULL OR b.status = $1)
@@ -758,6 +799,7 @@ type BetRow = {
   stake_tzs: string
   combined_odds: string
   potential_payout_tzs: string
+  payout_percent_bps: number | string
   status: string
   placed_at: Date
   settled_at: Date | null
@@ -800,6 +842,7 @@ async function withLegs(cfg: AppConfig, bets: BetRow[]) {
     stakeTzs: money(bet.stake_tzs),
     combinedOdds: Number(bet.combined_odds),
     potentialPayoutTzs: money(bet.potential_payout_tzs),
+    payoutPercentBps: Number(bet.payout_percent_bps),
     status: bet.status,
     placedAt: bet.placed_at,
     settledAt: bet.settled_at,

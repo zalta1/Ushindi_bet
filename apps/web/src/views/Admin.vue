@@ -89,6 +89,7 @@ const cfg = ref({
   withdrawalsEnabled: true,
   cashoutEnabled: false,
   cashoutMarginBps: 1200,
+  payoutPercentBps: 8800,
   feedSyncEnabled: false,
   lifecycleEnabled: false,
   hotMatchesAuto: false,
@@ -608,8 +609,10 @@ async function deleteNote(id: string) {
       <label>WhatsApp<input v-model="cfg.agentWhatsapp" data-testid="admin-whatsapp" /></label>
       <label class="check"><input type="checkbox" v-model="cfg.withdrawalsEnabled" /> Utoaji / Withdrawals</label>
       <label class="check"><input type="checkbox" v-model="cfg.cashoutEnabled" /> Cash out</label>
+      <label>Win payout (bps)<input type="number" v-model.number="cfg.payoutPercentBps" min="1" max="10000" data-testid="admin-payout-percent" /></label>
+      <p class="muted">8800 = 88% ya ushindi (dau × odds) na 2UP. Futa na marejesho ni 100%. Asilimia inafungwa kwenye tiketi.</p>
       <label>Cash out margin (bps)<input type="number" v-model.number="cfg.cashoutMarginBps" data-testid="admin-cashout-margin" /></label>
-      <p class="muted">1200 = 12% (0.88), sawa na PesaBetPro. Malipo ya ushindi wa mechi hubaki 100%.</p>
+      <p class="muted">1200 = 12% ya cash out. Hii si malipo ya ushindi, na cash out hauzidi kiasi cha ushindi.</p>
       <label class="check"><input type="checkbox" v-model="cfg.feedSyncEnabled" /> API-Football import / odds</label>
       <label class="check"><input type="checkbox" v-model="cfg.lifecycleEnabled" /> Auto start, live minute, full time</label>
       <label class="check"><input type="checkbox" v-model="cfg.hotMatchesAuto" /> HOT otomatiki (mechi 3 za live)</label>
