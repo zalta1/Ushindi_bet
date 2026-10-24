@@ -14,7 +14,7 @@ const sw = {
   heroLiveTitle: 'Bashiri. Shinda. Furahia.', heroLiveBody: 'Odds za moja kwa moja kwenye mechi kubwa — kwa TZS, kwa simu au kompyuta.', heroLiveCta: 'Bashiri Mubashara',
   aviator: {
     title: 'Aviator', fairLink: 'Ushahidi wa haki', fairTitle: 'Ushahidi wa haki', betting: 'Weka dau', flying: 'Inaruka', flewAway: 'IMEONDOKA', wait: 'Inasubiri', disabled: 'Mchezo umezimwa na msimamizi',
-    bet: 'Weka dau', cashout: 'Toa pesa', cashed: 'Umetoa {n}x', auto: 'Toa otomatiki', autoAt: 'Kizidishi', stake: 'Kiasi (TZS)', panel: 'Paneli {n}', login: 'Ingia ili kuweka dau',
+    bet: 'Weka dau', placed: 'Umeweka dau', cashout: 'Toa pesa', cashed: 'Umetoa {n}x', auto: 'Toa otomatiki', autoAt: 'Kizidishi', stake: 'Kiasi (TZS)', panel: 'Paneli {n}', login: 'Ingia ili kuweka dau',
     history: 'Historia', noHistory: 'Hakuna historia bado', bets: 'Dau za sasa', winners: 'Washindi', chat: 'Mazungumzo', chatPlaceholder: 'Andika ujumbe…', send: 'Tuma', emptyChat: 'Hakuna ujumbe', emptyBets: 'Hakuna dau bado', topWinners: 'Washindi wa masaa 24',
     viewers: 'Watazamaji {n}', limits: 'Dau TSH {min}–{max}. Ushindi wa juu TSH {win}.',
     algorithm: 'Crash inatokana na SHA-256(server seed + client seed + namba ya raundi), mtindo wa Bustabit, na RTP iliyowekwa. Hash ya server seed inachapishwa kabla ya raundi. Seed inafichuliwa baada ya kuanguka.',
@@ -39,7 +39,7 @@ const en = {
   heroLiveTitle: 'Bet. Win. Enjoy.', heroLiveBody: 'Live odds on the biggest matches — in TZS, on mobile or desktop.', heroLiveCta: 'Bet Live',
   aviator: {
     title: 'Aviator', fairLink: 'Fairness', fairTitle: 'Provably fair', betting: 'Place bets', flying: 'Flying', flewAway: 'FLEW AWAY', wait: 'Waiting', disabled: 'The game is switched off',
-    bet: 'Place bet', cashout: 'Cash out', cashed: 'Cashed out {n}x', auto: 'Auto cash out', autoAt: 'Multiplier', stake: 'Stake (TZS)', panel: 'Panel {n}', login: 'Log in to bet',
+    bet: 'Place bet', placed: 'Bet placed', cashout: 'Cash out', cashed: 'Cashed out {n}x', auto: 'Auto cash out', autoAt: 'Multiplier', stake: 'Stake (TZS)', panel: 'Panel {n}', login: 'Log in to bet',
     history: 'History', noHistory: 'No rounds yet', bets: 'Live bets', winners: 'Winners', chat: 'Chat', chatPlaceholder: 'Write a message…', send: 'Send', emptyChat: 'No messages', emptyBets: 'No bets yet', topWinners: 'Winners in the last 24 hours',
     viewers: 'Watching {n}', limits: 'Stake TSH {min}–{max}. Max win TSH {win}.',
     algorithm: 'The crash comes from SHA-256(server seed + client seed + round number), Bustabit style, at the configured RTP. The server seed hash is published before the round. The seed is revealed after the crash.',

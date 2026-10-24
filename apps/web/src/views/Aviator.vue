@@ -258,6 +258,12 @@ const headline = computed(() => {
             disabled
           >{{ $t('aviator.cashed', { n: mine(panel)!.multiplier?.toFixed(2) }) }}</button>
           <button
+            v-else-if="mine(panel)?.status === 'active'"
+            type="button"
+            disabled
+            :data-testid="`aviator-placed-${panel}`"
+          >{{ $t('aviator.placed') }}</button>
+          <button
             v-else
             type="submit"
             class="av-bet"
