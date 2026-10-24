@@ -6,6 +6,7 @@ import { closePool, waitForDatabase } from './db.js'
 import { migrate } from './migrate.js'
 import { loadPersistedSettings } from './admin/settings-store.js'
 import { seedAdmin } from './seed.js'
+import { startSportsWorker } from './sports/worker.js'
 
 const cfg = loadConfig()
 await waitForDatabase(cfg)
@@ -14,8 +15,10 @@ await loadPersistedSettings(cfg)
 await seedAdmin(cfg)
 await purgeExpiredSessions(cfg)
 const app = await buildApp()
+const stopWorker = startSportsWorker(cfg)
 
 const shutdown = async () => {
+  stopWorker()
   await app.close()
   await closePool()
   process.exit(0)

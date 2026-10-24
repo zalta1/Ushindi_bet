@@ -42,7 +42,8 @@ async function place() {
     <label>{{ $t('stake') }}</label>
     <input type="number" :value="slip.stake" min="1" step="1" data-testid="stake-input" @input="slip.setStake(Number(($event.target as HTMLInputElement).value))" />
     <p class="muted">{{ $t('stakeMin', { n: slip.minStake.toLocaleString('en-US') }) }} · {{ $t('stakeMax', { n: slip.maxStake.toLocaleString('en-US') }) }}</p>
-    <p>{{ $t('potential') }}: <b class="gold">{{ fmt(slip.payout) }}</b> <span v-if="slip.combined">({{ slip.combined.toFixed(2) }})</span></p>
+    <p>{{ $t('potential') }}: <b class="gold" data-testid="potential-win">{{ fmt(slip.payout) }}</b> <span v-if="slip.combined">({{ slip.combined.toFixed(2) }})</span></p>
+    <p v-if="slip.payoutPercentBps < 10000" class="muted" data-testid="payout-rate">{{ $t('payoutRate', { n: (slip.payoutPercentBps / 100).toFixed(0) }) }}</p>
     <p v-if="auth.user" class="muted">{{ $t('balance') }}: {{ fmt(auth.user.balanceTzs) }}</p>
     <p v-if="message()" class="live" data-testid="slip-error">{{ message() }}</p>
     <button type="button" data-testid="place-bet" :disabled="slip.placing || !slip.items.length" @click="place">{{ $t('place') }}</button>

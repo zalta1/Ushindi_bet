@@ -7,6 +7,7 @@ import { ApiError, money } from '../errors.js'
 import { operatorConfig } from '../operator-config.js'
 import { isAdminRole } from '../admin/roles.js'
 import { getPublicMatch, listAdminMatches, listPublicMatches } from './catalog.js'
+import { loadMatchDetails } from './details.js'
 import { activeApiKeys, checkApiFootballKey, syncApiFootball } from './feed.js'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -22,7 +23,12 @@ function dbError(err: unknown): ApiError | null {
   if (message.includes('invalid_idempotency_key')) return new ApiError(400, 'validation', { fields: { idempotencyKey: 'length' } })
   if (message.includes('unsupported_market')) return new ApiError(400, 'unsupported_market')
   if (message.includes('invalid_score')) return new ApiError(400, 'validation', { fields: { homeScore: 'invalid' } })
-  if (message.includes('match_not_found') || message.includes('odds_not_found')) return new ApiError(404, 'not_found')
+  if (message.includes('invalid_payout_percent')) return new ApiError(400, 'validation', { fields: { payoutPercentBps: 'range' } })
+  if (message.includes('invalid_odds')) return new ApiError(400, 'validation', { fields: { price: 'invalid' } })
+  if (message.includes('invalid_stake')) return new ApiError(400, 'validation', { fields: { stake: 'invalid' } })
+  if (message.includes('match_not_found') || message.includes('odds_not_found') || message.includes('bet_not_found')) return new ApiError(404, 'not_found')
+  if (message.includes('cashout_changed')) return new ApiError(409, 'cashout_changed')
+  if (message.includes('cashout_closed')) return new ApiError(409, 'cashout_closed')
   if (pg.code === '55P03') return new ApiError(409, 'busy')
   return null
 }
@@ -124,19 +130,54 @@ export function registerSportsRoutes(app: FastifyInstance, cfg: AppConfig) {
     if (!Number.isInteger(id)) throw new ApiError(404, 'not_found')
     const match = await getPublicMatch(cfg, id)
     if (!match) throw new ApiError(404, 'not_found')
-    return match
+    const details = await loadMatchDetails(cfg, match)
+    return { ...match, details }
   })
 
   app.get('/api/bets/limits', async () => ({
     minStake: operatorConfig.minStake,
     maxStake: operatorConfig.maxStake,
     currency: 'TZS',
+    cashoutEnabled: operatorConfig.cashoutEnabled,
+    cashoutMarginBps: operatorConfig.cashoutMarginBps,
+    payoutPercentBps: operatorConfig.payoutPercentBps,
   }))
+
+  app.get('/api/bets/quote', async (req) => {
+    const query = req.query as { stake?: string; price?: string | string[] }
+    const stake = Number(query.stake)
+    if (!Number.isInteger(stake) || stake < 1 || stake > 100_000_000) {
+      throw new ApiError(400, 'validation', { fields: { stake: 'invalid' } })
+    }
+    const raw = query.price === undefined ? [] : Array.isArray(query.price) ? query.price : [query.price]
+    if (raw.length < 1 || raw.length > 20) throw new ApiError(400, 'validation', { fields: { price: 'invalid' } })
+    const prices = raw.map((value) => {
+      const n = Number(value)
+      if (!Number.isFinite(n) || n <= 1 || n > 1000) throw new ApiError(400, 'validation', { fields: { price: 'invalid' } })
+      return String(n)
+    })
+    try {
+      const { rows } = await getPool(cfg).query<{ result: { potential_payout_tzs: number | string; combined_odds: number | string; payout_percent_bps: number | string } }>(
+        `SELECT quote_bet($1, (SELECT COALESCE(array_agg(v::numeric), ARRAY[]::numeric[]) FROM unnest($2::text[]) AS v), $3) AS result`,
+        [stake, prices, operatorConfig.payoutPercentBps],
+      )
+      const result = rows[0].result
+      return {
+        potentialPayoutTzs: money(result.potential_payout_tzs),
+        combinedOdds: Number(result.combined_odds),
+        payoutPercentBps: Number(result.payout_percent_bps),
+      }
+    } catch (err) {
+      const mapped = dbError(err)
+      if (mapped) throw mapped
+      throw err
+    }
+  })
 
   app.get('/api/bets', async (req) => {
     if (!req.auth) throw new ApiError(401, 'unauthenticated')
     const status = (req.query as { status?: string }).status
-    if (status && !['open', 'won', 'lost', 'void'].includes(status)) {
+    if (status && !['open', 'won', 'lost', 'void', 'cashout'].includes(status)) {
       throw new ApiError(400, 'validation', { fields: { status: 'invalid' } })
     }
     const bets = await getPool(cfg).query<{
@@ -144,18 +185,64 @@ export function registerSportsRoutes(app: FastifyInstance, cfg: AppConfig) {
       stake_tzs: string
       combined_odds: string
       potential_payout_tzs: string
+      payout_percent_bps: number | string
       status: string
       placed_at: Date
       settled_at: Date | null
     }>(
-      `SELECT id, stake_tzs, combined_odds, potential_payout_tzs, status, placed_at, settled_at
+      `SELECT id, stake_tzs, combined_odds, potential_payout_tzs, payout_percent_bps, status, placed_at, settled_at
          FROM bets
         WHERE user_id = $1 AND ($2::text IS NULL OR status = $2)
         ORDER BY placed_at DESC
         LIMIT 50`,
       [req.auth.userId, status ?? null],
     )
-    return { data: await withLegs(cfg, bets.rows) }
+    const data = await withLegs(cfg, bets.rows)
+    if (operatorConfig.cashoutEnabled) {
+      for (const bet of data) {
+        if (bet.status !== 'open') continue
+        bet.cashoutTzs = await quoteCashout(cfg, req.auth!.userId, bet.id)
+      }
+    }
+    return { data }
+  })
+
+  app.get('/api/bets/:id/cashout', async (req) => {
+    if (!req.auth) throw new ApiError(401, 'unauthenticated')
+    const id = (req.params as { id: string }).id
+    if (!UUID.test(id)) throw new ApiError(404, 'not_found')
+    if (!operatorConfig.cashoutEnabled) return { enabled: false, cashoutTzs: null }
+    return { enabled: true, cashoutTzs: await quoteCashout(cfg, req.auth.userId, id) }
+  })
+
+  app.post('/api/bets/:id/cashout', { preHandler: playerWrite }, async (req) => {
+    if (!operatorConfig.cashoutEnabled) throw new ApiError(403, 'cashout_disabled')
+    const id = (req.params as { id: string }).id
+    if (!UUID.test(id)) throw new ApiError(404, 'not_found')
+    const body = (req.body ?? {}) as { expectedTzs?: unknown }
+    if (typeof body.expectedTzs !== 'number' || !Number.isInteger(body.expectedTzs) || body.expectedTzs < 1) {
+      throw new ApiError(400, 'validation', { fields: { expectedTzs: 'invalid' } })
+    }
+    try {
+      const { rows } = await getPool(cfg).query<{ result: { idempotent: boolean; credited_tzs: number | string; balance_tzs?: number | string; status: string } }>(
+        `SELECT cashout_bet_atomic($1, $2, $3, $4) AS result`,
+        [req.auth!.userId, id, operatorConfig.cashoutMarginBps, body.expectedTzs],
+      )
+      const result = rows[0].result
+      const balance = result.balance_tzs == null
+        ? await getPool(cfg).query<{ balance_tzs: string }>(`SELECT balance_tzs FROM wallets WHERE user_id = $1`, [req.auth!.userId])
+        : null
+      return {
+        idempotent: result.idempotent,
+        creditedTzs: money(result.credited_tzs),
+        balanceTzs: money(result.balance_tzs ?? balance?.rows[0]?.balance_tzs),
+        status: result.status,
+      }
+    } catch (err) {
+      const mapped = dbError(err)
+      if (mapped) throw mapped
+      throw err
+    }
   })
 
   app.post('/api/bets', { preHandler: playerWrite }, async (req) => {
@@ -175,8 +262,9 @@ export function registerSportsRoutes(app: FastifyInstance, cfg: AppConfig) {
       stake_tzs: string
       combined_odds: string
       potential_payout_tzs: string
+      payout_percent_bps: number | string
       status: string
-    }>(`SELECT id, user_id, stake_tzs, combined_odds, potential_payout_tzs, status FROM bets WHERE idempotency_key = $1`, [idempotencyKey])
+    }>(`SELECT id, user_id, stake_tzs, combined_odds, potential_payout_tzs, payout_percent_bps, status FROM bets WHERE idempotency_key = $1`, [idempotencyKey])
     if (existing.rows[0]) {
       const row = existing.rows[0]
       if (row.user_id !== userId || Number(row.stake_tzs) !== stakeTzs) throw new ApiError(409, 'idempotency_conflict')
@@ -187,6 +275,7 @@ export function registerSportsRoutes(app: FastifyInstance, cfg: AppConfig) {
         stakeTzs,
         combinedOdds: Number(row.combined_odds),
         potentialPayoutTzs: money(row.potential_payout_tzs),
+        payoutPercentBps: Number(row.payout_percent_bps),
         status: row.status,
         balanceTzs: money(balance.rows[0]?.balance_tzs),
       }
@@ -252,10 +341,11 @@ export function registerSportsRoutes(app: FastifyInstance, cfg: AppConfig) {
           stake_tzs: number | string
           combined_odds: number | string
           potential_payout_tzs: number | string
+          payout_percent_bps: number | string
           balance_tzs: number | string
         } }>(
-          `SELECT place_bet_atomic($1, $2, $3::jsonb, $4) AS result`,
-          [userId, stakeTzs, JSON.stringify(payload), idempotencyKey],
+          `SELECT place_bet_atomic($1, $2, $3::jsonb, $4, $5) AS result`,
+          [userId, stakeTzs, JSON.stringify(payload), idempotencyKey, operatorConfig.payoutPercentBps],
         )
         const result = placed.rows[0].result
         return {
@@ -264,6 +354,7 @@ export function registerSportsRoutes(app: FastifyInstance, cfg: AppConfig) {
           stakeTzs: money(result.stake_tzs),
           combinedOdds: Number(result.combined_odds),
           potentialPayoutTzs: money(result.potential_payout_tzs),
+          payoutPercentBps: Number(result.payout_percent_bps),
           status: 'open',
           balanceTzs: money(result.balance_tzs),
         }
@@ -406,15 +497,19 @@ export function registerSportsRoutes(app: FastifyInstance, cfg: AppConfig) {
   app.post('/api/admin/matches/:id/odds', { preHandler: guardWrite }, async (req) => {
     const matchId = Number((req.params as { id: string }).id)
     if (!Number.isInteger(matchId)) throw new ApiError(404, 'not_found')
-    const body = (req.body ?? {}) as { market?: unknown; selection?: unknown; price?: unknown; suspended?: unknown }
-    const market = textField(body.market, 'market', 2, 40)
-    if (!['1X2', 'BTTS', 'Over/Under', 'Double Chance'].includes(market)) {
+    const body = (req.body ?? {}) as { market?: unknown; selection?: unknown; price?: unknown; suspended?: unknown; line?: unknown }
+    const market = textField(body.market, 'market', 2, 60)
+    if (!/^(1X2|BTTS|Over\/Under|Double Chance|Correct Score|Draw No Bet|Odd\/Even|Home\/Away|Exact Goals|2UP|3-Way Handicap|2-Way Handicap)( |$)/.test(market)) {
       throw new ApiError(400, 'validation', { fields: { market: 'invalid' } })
     }
     const selection = textField(body.selection, 'selection', 1, 40)
     const price = priceField(body.price, 'price')
     const suspended = Boolean(body.suspended)
-    const line = market === 'Over/Under' ? Number(selection.match(/([0-9]+\.?[0-9]*)/)?.[1] ?? 2.5) : null
+    const explicit = typeof body.line === 'number' && Number.isFinite(body.line) ? body.line : null
+    const parsed = selection.match(/([+-]?[0-9]+\.?[0-9]*)/)
+    const line = explicit ?? (market === 'Over/Under' || market.startsWith('3-Way Handicap') || market.startsWith('2-Way Handicap')
+      ? Number(parsed?.[1] ?? (market === 'Over/Under' ? 2.5 : 0))
+      : null)
     const { rows } = await getPool(cfg).query<{ id: number }>(
       `INSERT INTO markets (match_id, name, code, line)
        SELECT $1, $2, $2, $3
@@ -484,9 +579,165 @@ export function registerSportsRoutes(app: FastifyInstance, cfg: AppConfig) {
     }
   })
 
+  app.post('/api/admin/matches/:id/hot', { preHandler: guardWrite }, async (req) => {
+    const matchId = Number((req.params as { id: string }).id)
+    const body = (req.body ?? {}) as { hot?: unknown }
+    if (!Number.isInteger(matchId)) throw new ApiError(404, 'not_found')
+    if (typeof body.hot !== 'boolean') throw new ApiError(400, 'validation', { fields: { hot: 'invalid' } })
+    const { rows } = await getPool(cfg).query<{ id: number }>(
+      `UPDATE matches SET is_hot_match = $2 WHERE id = $1 RETURNING id`,
+      [matchId, body.hot],
+    )
+    if (!rows[0]) throw new ApiError(404, 'not_found')
+    await audit(cfg, req, 'matches.hot', { matchId, hot: body.hot })
+    return { id: matchId, hot: body.hot }
+  })
+
+  app.post('/api/admin/matches/:id/score', { preHandler: guardWrite }, async (req) => {
+    const matchId = Number((req.params as { id: string }).id)
+    const body = (req.body ?? {}) as { homeScore?: unknown; awayScore?: unknown; minute?: unknown }
+    if (!Number.isInteger(matchId)) throw new ApiError(404, 'not_found')
+    if (typeof body.homeScore !== 'number' || typeof body.awayScore !== 'number' || !Number.isInteger(body.homeScore) || !Number.isInteger(body.awayScore)) {
+      throw new ApiError(400, 'validation', { fields: { homeScore: 'invalid' } })
+    }
+    const minute = Math.max(0, Math.min(130, Number(body.minute) || 0))
+    try {
+      const result = await withTx(cfg, async (client) => {
+        const updated = await client.query<{ id: number }>(
+          `UPDATE matches
+              SET home_score = $2, away_score = $3, minute = $4, status = 'live'
+            WHERE id = $1 AND status IN ('upcoming', 'live')
+            RETURNING id`,
+          [matchId, body.homeScore, body.awayScore, minute],
+        )
+        if (!updated.rows[0]) throw new ApiError(409, 'match_closed')
+        const two = await client.query<{ result: { paid: number; reversed: number } }>(
+          `SELECT process_two_up($1) AS result`,
+          [matchId],
+        )
+        return two.rows[0].result
+      })
+      await audit(cfg, req, 'matches.score', { matchId, homeScore: body.homeScore, awayScore: body.awayScore, minute, ...result })
+      return { id: matchId, homeScore: body.homeScore, awayScore: body.awayScore, minute, paid: result.paid, reversed: result.reversed }
+    } catch (err) {
+      const mapped = dbError(err)
+      if (mapped) throw mapped
+      if (err instanceof ApiError) throw err
+      throw err
+    }
+  })
+
+  app.get('/api/admin/two-up', { preHandler: guardRead }, async (req) => {
+    const query = req.query as { q?: string; enabled?: string }
+    const q = (query.q ?? '').trim().slice(0, 80)
+    const enabledOnly = query.enabled === 'true'
+    const { rows } = await getPool(cfg).query<{
+      id: number
+      home: string
+      away: string
+      league: string
+      kickoff_at: Date
+      status: string
+      two_up_enabled: boolean
+      two_up_home_odds: string | null
+      two_up_draw_odds: string | null
+      two_up_away_odds: string | null
+      two_up_team: string
+    }>(
+      `SELECT id, home, away, league, kickoff_at, status, two_up_enabled,
+              two_up_home_odds, two_up_draw_odds, two_up_away_odds, two_up_team
+         FROM matches
+        WHERE status = 'upcoming'
+          AND kickoff_at >= now() - interval '1 hour'
+          AND ($1::text = '' OR home ILIKE '%' || $1 || '%' OR away ILIKE '%' || $1 || '%' OR league ILIKE '%' || $1 || '%')
+          AND ($2::boolean = false OR two_up_enabled)
+        ORDER BY kickoff_at
+        LIMIT 500`,
+      [q, enabledOnly],
+    )
+    return {
+      data: rows.map((row) => ({
+        id: row.id,
+        home: row.home,
+        away: row.away,
+        league: row.league,
+        kickoff: row.kickoff_at,
+        status: row.status,
+        enabled: row.two_up_enabled,
+        homeOdds: row.two_up_home_odds == null ? null : Number(row.two_up_home_odds),
+        drawOdds: row.two_up_draw_odds == null ? null : Number(row.two_up_draw_odds),
+        awayOdds: row.two_up_away_odds == null ? null : Number(row.two_up_away_odds),
+        team: row.two_up_team,
+      })),
+    }
+  })
+
+  app.post('/api/admin/matches/:id/two-up', { preHandler: guardWrite }, async (req) => {
+    const matchId = Number((req.params as { id: string }).id)
+    const body = (req.body ?? {}) as { enabled?: unknown; homeOdds?: unknown; drawOdds?: unknown; awayOdds?: unknown; team?: unknown }
+    if (!Number.isInteger(matchId)) throw new ApiError(404, 'not_found')
+    if (typeof body.enabled !== 'boolean') throw new ApiError(400, 'validation', { fields: { enabled: 'invalid' } })
+    const team = body.team === 'home' || body.team === 'away' || body.team === 'both' ? body.team : null
+    if (!team) throw new ApiError(400, 'validation', { fields: { team: 'invalid' } })
+    const homeOdds = priceField(body.homeOdds, 'homeOdds')
+    const drawOdds = priceField(body.drawOdds, 'drawOdds')
+    const awayOdds = priceField(body.awayOdds, 'awayOdds')
+    if (body.enabled && (homeOdds < 1.01 || drawOdds < 1.01 || awayOdds < 1.01)) {
+      throw new ApiError(400, 'validation', { fields: { homeOdds: 'min' } })
+    }
+    const saved = await withTx(cfg, async (client) => {
+      const match = await client.query<{ id: number }>(
+        `UPDATE matches
+            SET two_up_enabled = $2, two_up_home_odds = $3, two_up_draw_odds = $4, two_up_away_odds = $5, two_up_team = $6
+          WHERE id = $1 AND status IN ('upcoming', 'live')
+          RETURNING id`,
+        [matchId, body.enabled, homeOdds, drawOdds, awayOdds, team],
+      )
+      if (!match.rows[0]) throw new ApiError(409, 'match_closed')
+      const market = await client.query<{ id: number }>(
+        `INSERT INTO markets (match_id, name, code)
+         VALUES ($1, '2UP', '2UP')
+         ON CONFLICT (match_id, code) DO UPDATE SET name = '2UP'
+         RETURNING id`,
+        [matchId],
+      )
+      const odds: { selection: string; price: number; id: number }[] = []
+      for (const item of [{ selection: '1', price: homeOdds }, { selection: 'X', price: drawOdds }, { selection: '2', price: awayOdds }]) {
+        const row = await client.query<{ id: number }>(
+          `INSERT INTO odds (market_id, selection, price, suspended, updated_at)
+           VALUES ($1, $2, $3, $4, now())
+           ON CONFLICT (market_id, selection) DO UPDATE
+             SET price = EXCLUDED.price, suspended = EXCLUDED.suspended, updated_at = now()
+           RETURNING id`,
+          [market.rows[0].id, item.selection, item.price, !body.enabled],
+        )
+        odds.push({ selection: item.selection, price: item.price, id: row.rows[0].id })
+      }
+      return odds
+    })
+    await audit(cfg, req, 'matches.two_up', { matchId, enabled: body.enabled, homeOdds, drawOdds, awayOdds, team })
+    return { id: matchId, enabled: body.enabled, team, odds: saved }
+  })
+
+  app.get('/api/admin/feed/runs', { preHandler: guardRead }, async () => {
+    const { rows } = await getPool(cfg).query(
+      `SELECT id, job, ok, detail, created_at FROM feed_runs ORDER BY id DESC LIMIT 30`,
+    )
+    return {
+      enabled: operatorConfig.feedSyncEnabled,
+      lifecycleEnabled: operatorConfig.lifecycleEnabled,
+      intervals: {
+        feedSyncIntervalSec: operatorConfig.feedSyncIntervalSec,
+        liveOddsIntervalSec: operatorConfig.liveOddsIntervalSec,
+        lifecycleIntervalSec: operatorConfig.lifecycleIntervalSec,
+      },
+      data: rows,
+    }
+  })
+
   app.get('/api/admin/bets', { preHandler: guardRead }, async (req) => {
     const status = (req.query as { status?: string }).status
-    if (status && !['open', 'won', 'lost', 'void'].includes(status)) {
+    if (status && !['open', 'won', 'lost', 'void', 'cashout'].includes(status)) {
       throw new ApiError(400, 'validation', { fields: { status: 'invalid' } })
     }
     const totals = await getPool(cfg).query<{
@@ -514,11 +765,12 @@ export function registerSportsRoutes(app: FastifyInstance, cfg: AppConfig) {
       stake_tzs: string
       combined_odds: string
       potential_payout_tzs: string
+      payout_percent_bps: number | string
       status: string
       placed_at: Date
       settled_at: Date | null
     }>(
-      `SELECT b.id, u.phone, b.stake_tzs, b.combined_odds, b.potential_payout_tzs, b.status, b.placed_at, b.settled_at
+      `SELECT b.id, u.phone, b.stake_tzs, b.combined_odds, b.potential_payout_tzs, b.payout_percent_bps, b.status, b.placed_at, b.settled_at
          FROM bets b
          JOIN users u ON u.id = b.user_id
         WHERE ($1::text IS NULL OR b.status = $1)
@@ -547,6 +799,7 @@ type BetRow = {
   stake_tzs: string
   combined_odds: string
   potential_payout_tzs: string
+  payout_percent_bps: number | string
   status: string
   placed_at: Date
   settled_at: Date | null
@@ -589,9 +842,23 @@ async function withLegs(cfg: AppConfig, bets: BetRow[]) {
     stakeTzs: money(bet.stake_tzs),
     combinedOdds: Number(bet.combined_odds),
     potentialPayoutTzs: money(bet.potential_payout_tzs),
+    payoutPercentBps: Number(bet.payout_percent_bps),
     status: bet.status,
     placedAt: bet.placed_at,
     settledAt: bet.settled_at,
+    cashoutTzs: null as number | null,
     legs: grouped.get(bet.id) ?? [],
   }))
+}
+
+async function quoteCashout(cfg: AppConfig, userId: string, betId: string): Promise<number | null> {
+  try {
+    const { rows } = await getPool(cfg).query<{ v: string }>(
+      `SELECT cashout_value($1, $2, $3)::text AS v`,
+      [userId, betId, operatorConfig.cashoutMarginBps],
+    )
+    return money(rows[0]?.v)
+  } catch {
+    return null
+  }
 }

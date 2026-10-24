@@ -15,7 +15,7 @@ type SectionId =
 const ready = new Set<SectionId>([
   'overview', 'users', 'banners', 'notifications', 'announcements',
   'wallet-audit', 'audit', 'account', 'admins', 'settings',
-  'match-api', 'matches', 'bets',
+  'match-api', 'matches', 'bets', 'two-up-markets',
 ])
 
 const menu: SectionId[] = [
@@ -64,6 +64,10 @@ const apiKeys = ref<ApiKeyRow[]>([])
 const apiLabel = ref('')
 const apiKey = ref('')
 const adminMatches = ref<AdminMatch[]>([])
+const twoUp = ref<TwoUpRow[]>([])
+const twoQuery = ref('')
+const twoOnly = ref(false)
+const twoMsg = ref('')
 const betFilter = ref<'all' | 'open' | 'won' | 'lost'>('all')
 const betStats = ref<BetStats | null>(null)
 const adminBets = ref<AdminBet[]>([])
@@ -84,6 +88,14 @@ const cfg = ref({
   rtpBps: 9700,
   withdrawalsEnabled: true,
   cashoutEnabled: false,
+  cashoutMarginBps: 1200,
+  payoutPercentBps: 8800,
+  feedSyncEnabled: false,
+  lifecycleEnabled: false,
+  hotMatchesAuto: false,
+  feedSyncIntervalSec: 300,
+  liveOddsIntervalSec: 60,
+  lifecycleIntervalSec: 30,
   welcomeBonusEnabled: false,
   welcomeBonusTzs: 0,
   securityDepositTzs: 0,
@@ -109,7 +121,8 @@ type Announcement = { id: string; message_sw: string; message_en: string; active
 type Note = { id: string; phone: string | null; title: string; body: string }
 type ApiKeyRow = { source: 'system' | 'custom'; id: string | null; label: string; masked: string; is_active: boolean; check?: { ok: boolean; message?: string } | null }
 type Outcome = { sel: string; price: number; oddsId: number; market: string; suspended?: boolean }
-type AdminMatch = { id: number; home: string; away: string; league: string; country: string; kickoff: string; status: string; live: boolean; minute: number; hs: number; as: number; markets: Record<string, Outcome[]> }
+type AdminMatch = { id: number; home: string; away: string; league: string; country: string; kickoff: string; status: string; live: boolean; minute: number; hs: number; as: number; hot?: boolean; markets: Record<string, Outcome[]> }
+type TwoUpRow = { id: number; home: string; away: string; league: string; kickoff: string; enabled: boolean; homeOdds: number | null; drawOdds: number | null; awayOdds: number | null; team: string }
 type BetStats = { total: number; open: number; won: number; lost: number; totalStakes: number; totalPayouts: number }
 type AdminBet = { id: string; phone: string; stakeTzs: number; combinedOdds: number; potentialPayoutTzs: number; status: string; legs: { match: string; market: string; selection: string; odds: number; status: string }[] }
 
@@ -279,6 +292,47 @@ async function voidMatch(id: number) {
   }
 }
 
+async function toggleHot(match: AdminMatch) {
+  error.value = ''
+  await api(`/api/admin/matches/${match.id}/hot`, { method: 'POST', json: { hot: !match.hot } })
+  status.value = 'saved'
+  await loadAdminMatches()
+}
+
+async function loadTwoUp() {
+  const data = await api<{ data: TwoUpRow[] }>(`/api/admin/two-up?q=${encodeURIComponent(twoQuery.value)}&enabled=${twoOnly.value ? 'true' : 'false'}`)
+  twoUp.value = data.data.map((row) => ({
+    ...row,
+    homeOdds: row.homeOdds ?? 1.9,
+    drawOdds: row.drawOdds ?? 3.4,
+    awayOdds: row.awayOdds ?? 4.1,
+    team: row.team || 'both',
+  }))
+}
+
+async function saveTwoUp(row: TwoUpRow) {
+  twoMsg.value = ''
+  error.value = ''
+  try {
+    await api(`/api/admin/matches/${row.id}/two-up`, {
+      method: 'POST',
+      json: {
+        enabled: row.enabled,
+        homeOdds: Number(row.homeOdds),
+        drawOdds: Number(row.drawOdds),
+        awayOdds: Number(row.awayOdds),
+        team: row.team || 'both',
+      },
+    })
+    twoMsg.value = '2UP imesasishwa'
+    status.value = 'saved'
+    await loadTwoUp()
+  } catch (err) {
+    twoMsg.value = 'Odds zote (Home/Draw/Away) lazima ziwe 1.01 au zaidi'
+    fail(err)
+  }
+}
+
 async function loadAdminBets() {
   const q = betFilter.value === 'all' ? '' : `?status=${betFilter.value}`
   const data = await api<{ stats: BetStats; data: AdminBet[] }>(`/api/admin/bets${q}`)
@@ -300,6 +354,7 @@ async function refresh() {
     if (section.value === 'match-api') await loadMatchApi()
     if (section.value === 'matches') await loadAdminMatches()
     if (section.value === 'bets') await loadAdminBets()
+    if (section.value === 'two-up-markets') await loadTwoUp()
   } catch (err) {
     fail(err)
   }
@@ -554,6 +609,16 @@ async function deleteNote(id: string) {
       <label>WhatsApp<input v-model="cfg.agentWhatsapp" data-testid="admin-whatsapp" /></label>
       <label class="check"><input type="checkbox" v-model="cfg.withdrawalsEnabled" /> Utoaji / Withdrawals</label>
       <label class="check"><input type="checkbox" v-model="cfg.cashoutEnabled" /> Cash out</label>
+      <label>Win payout (bps)<input type="number" v-model.number="cfg.payoutPercentBps" min="1" max="10000" data-testid="admin-payout-percent" /></label>
+      <p class="muted">8800 = 88% ya ushindi (dau × odds) na 2UP. Futa na marejesho ni 100%. Asilimia inafungwa kwenye tiketi.</p>
+      <label>Cash out margin (bps)<input type="number" v-model.number="cfg.cashoutMarginBps" data-testid="admin-cashout-margin" /></label>
+      <p class="muted">1200 = 12% ya cash out. Hii si malipo ya ushindi, na cash out hauzidi kiasi cha ushindi.</p>
+      <label class="check"><input type="checkbox" v-model="cfg.feedSyncEnabled" /> API-Football import / odds</label>
+      <label class="check"><input type="checkbox" v-model="cfg.lifecycleEnabled" /> Auto start, live minute, full time</label>
+      <label class="check"><input type="checkbox" v-model="cfg.hotMatchesAuto" /> HOT otomatiki (mechi 3 za live)</label>
+      <label>Import (sekunde)<input type="number" v-model.number="cfg.feedSyncIntervalSec" /></label>
+      <label>Live odds (sekunde)<input type="number" v-model.number="cfg.liveOddsIntervalSec" /></label>
+      <label>Lifecycle (sekunde)<input type="number" v-model.number="cfg.lifecycleIntervalSec" /></label>
       <label class="check"><input type="checkbox" v-model="cfg.welcomeBonusEnabled" /> Bonus</label>
       <label class="check"><input type="checkbox" v-model="cfg.maintenanceMode" /> Maintenance</label>
       <p class="muted">TZS</p>
@@ -719,7 +784,8 @@ async function deleteNote(id: string) {
       </div>
       <div v-for="match in adminMatches" :key="match.id" class="card">
         <button type="button" @click="selectedMatch = match.id"><b>{{ match.home }} vs {{ match.away }}</b></button>
-        <p class="muted">{{ match.league }} · {{ match.country }} · {{ match.status }} <span v-if="match.live">{{ match.minute }}'</span> {{ match.hs }}-{{ match.as }}</p>
+        <p class="muted">{{ match.league }} · {{ match.country }} · {{ match.status }} <span v-if="match.live">{{ match.minute }}'</span> {{ match.hs }}-{{ match.as }} <span v-if="match.hot" class="hot-badge">HOT</span></p>
+        <button type="button" @click="toggleHot(match)" data-testid="hot-toggle">{{ match.hot ? 'Zima HOT' : 'Washa HOT' }}</button>
         <div v-if="selectedMatch === match.id">
           <p v-for="(outcomes, market) in match.markets" :key="market">
             {{ market }}:
@@ -733,6 +799,33 @@ async function deleteNote(id: string) {
             <button type="button" @click="voidMatch(match.id)" data-testid="match-void">Futa mechi</button>
           </template>
         </div>
+      </div>
+    </section>
+
+    <section v-else-if="section === 'two-up-markets'" data-testid="admin-two-up">
+      <p class="muted">Soko hili linaonekana kwa wateja kama 2UP | Full Time tofauti na 1X2 ya kawaida.</p>
+      <form @submit.prevent="loadTwoUp">
+        <input v-model="twoQuery" placeholder="Tafuta kwa Team au Ligi" data-testid="two-up-search" />
+        <label class="check"><input type="checkbox" v-model="twoOnly" @change="loadTwoUp" /> 2UP ON tu</label>
+        <button type="submit">Tafuta</button>
+      </form>
+      <p v-if="twoMsg" data-testid="two-up-toast">{{ twoMsg }}</p>
+      <p v-if="!twoUp.length" class="muted">Hakuna mechi</p>
+      <div v-for="row in twoUp" :key="row.id" class="card" data-testid="two-up-row">
+        <b>{{ row.home }} vs {{ row.away }}</b>
+        <p class="muted">{{ row.league }}</p>
+        <label class="check"><input type="checkbox" v-model="row.enabled" /> 2UP</label>
+        <label>Home 2UP (1)<input type="number" step="0.01" v-model.number="row.homeOdds" data-testid="two-up-home" /></label>
+        <label>Draw 2UP (X)<input type="number" step="0.01" v-model.number="row.drawOdds" data-testid="two-up-draw" /></label>
+        <label>Away 2UP (2)<input type="number" step="0.01" v-model.number="row.awayOdds" data-testid="two-up-away" /></label>
+        <label>Upande
+          <select v-model="row.team">
+            <option value="both">Pande zote</option>
+            <option value="home">Nyumbani</option>
+            <option value="away">Ugenini</option>
+          </select>
+        </label>
+        <button type="button" @click="saveTwoUp(row)" data-testid="two-up-save">Hifadhi</button>
       </div>
     </section>
 

@@ -6,6 +6,9 @@ header{position:sticky;top:0;background:var(--green);padding:10px 16px;display:f
 main{min-width:0;padding:14px}.slip-d{min-width:0;padding:14px 14px 14px 0}
 .card,.match{background:var(--card);border-radius:12px;padding:14px;margin:10px 0}.odds{display:flex;gap:8px;margin-top:8px}.odds button,.chips button,button{background:#172a4d;color:var(--text);border:1px solid #243f6b;border-radius:8px;padding:8px 12px;cursor:pointer}:root.light button{background:#e8efec;color:#10201a}
 .odds button b{display:block;color:var(--gold)}input,select{padding:10px;border-radius:8px;width:100%;margin:6px 0}.live{color:#ff5a5a;font-weight:700}.gold{color:var(--gold)}
+.hot-badge{display:inline-block;background:#c81e1e;color:#fff;font-size:11px;font-weight:700;border-radius:6px;padding:2px 6px;margin-right:6px}
+.tracker-score{font-size:28px;font-weight:800;margin:6px 0}.tracker-bar{display:flex;height:28px;border-radius:8px;overflow:hidden;background:#10201a}.tracker-bar span{display:flex;align-items:center;justify-content:center;background:#1f6b45;color:#fff;font-size:12px}.tracker-bar span+span{background:#24508a}
+.split{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}.tile{background:var(--card);padding:20px;border-radius:12px;text-align:center}
 .bottombar{display:none} .slip{background:var(--card);padding:14px;border-radius:12px;position:sticky;top:70px}
 @media(max-width:900px){.layout{grid-template-columns:1fr}.rail-d,.slip-d{display:none}.bottombar{display:flex;position:fixed;bottom:0;left:0;right:0;background:var(--green);justify-content:space-around;padding:10px;z-index:9}.slip.open{display:block;position:fixed;inset:0;z-index:20;overflow:auto}}

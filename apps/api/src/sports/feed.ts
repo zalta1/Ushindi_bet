@@ -12,15 +12,35 @@ const MAJOR = new Set([39, 140, 135, 78, 61, 2, 3, 848])
 
 type Bookmaker = {
   id?: number
-  bets?: { id?: number; values?: { value?: string; odd?: string; suspended?: boolean }[] }[]
+  bets?: { id?: number; values?: { value?: string; odd?: string; suspended?: boolean; handicap?: string }[] }[]
 }
 
 export type ParsedSelection = { market: string; selection: string; price: number; line: number | null }
 
-const WINNER = 1
-const GOALS = 5
-const BTTS = 8
-const DOUBLE = 12
+const PREMATCH = {
+  winner: 1,
+  homeAway: 2,
+  handicap: 4,
+  goals: 5,
+  btts: 8,
+  exact: 10,
+  double: 12,
+  oddEven: 21,
+  dnb: 29,
+  asian: 33,
+  exactGoals: 38,
+}
+const LIVE_IDS = {
+  winner: 59,
+  goals: 36,
+  btts: 69,
+  double: 72,
+  exact: 23,
+  handicap: 21,
+  asian: 33,
+  dnb: 48,
+  oddEven: 68,
+}
 
 function priceOf(odd: string | undefined): number | null {
   const n = Number(odd)
@@ -60,51 +80,81 @@ function mapOverUnder(value: string): { selection: string; line: number } | null
   return { selection: `${side} ${match[2]}`, line }
 }
 
+function signed(n: number): string {
+  return n > 0 ? `+${n}` : String(n)
+}
+
+function pushParsed(out: ParsedSelection[], seen: Set<string>, market: string, selection: string, price: number, line: number | null) {
+  const key = `${market}:${selection}`
+  if (seen.has(key)) return
+  seen.add(key)
+  out.push({ market, selection, price, line })
+}
+
 /** Turns an API-Football /odds bookmaker list into the markets we settle. */
-export function parseApiFootballBookmakers(bookmakers: unknown): ParsedSelection[] {
+export function parseApiFootballBookmakers(bookmakers: unknown, mode: 'prematch' | 'live' = 'prematch'): ParsedSelection[] {
   if (!Array.isArray(bookmakers) || bookmakers.length === 0) return []
   const rows = bookmakers as Bookmaker[]
   const book = rows.find((item) => item.id === 8) ?? rows[0]
+  const ids = mode === 'live' ? LIVE_IDS : PREMATCH
   const out: ParsedSelection[] = []
   const seen = new Set<string>()
   for (const bet of book.bets ?? []) {
     for (const value of bet.values ?? []) {
       if (value.suspended) continue
       const price = priceOf(value.odd)
-      const label = value.value ?? ''
+      const label = (value.value ?? '').trim()
       if (price == null || !label) continue
-      let market = ''
-      let selection = ''
-      let line: number | null = null
-      if (bet.id === WINNER) {
+      if (bet.id === ids.winner) {
         const mapped = mapWinner(label)
         if (!mapped) continue
-        market = '1X2'
-        selection = mapped
-      } else if (bet.id === BTTS) {
+        pushParsed(out, seen, '1X2', mapped, price, null)
+      } else if (bet.id === ids.btts) {
         const mapped = mapBtts(label)
         if (!mapped) continue
-        market = 'BTTS'
-        selection = mapped
-      } else if (bet.id === DOUBLE) {
+        pushParsed(out, seen, 'BTTS', mapped, price, null)
+      } else if (bet.id === ids.double) {
         const mapped = mapDouble(label)
         if (!mapped) continue
-        market = 'Double Chance'
-        selection = mapped
-      } else if (bet.id === GOALS) {
+        pushParsed(out, seen, 'Double Chance', mapped, price, null)
+      } else if (bet.id === ids.goals) {
         const mapped = mapOverUnder(label)
         if (!mapped) continue
-        market = 'Over/Under'
-        selection = mapped.selection
-        line = mapped.line
-      } else {
-        continue
+        pushParsed(out, seen, 'Over/Under', mapped.selection, price, mapped.line)
+      } else if (bet.id === ids.exact && /^[0-9]+\s*[-:]\s*[0-9]+$/.test(label)) {
+        const [home, away] = label.split(/[-:]/).map((part) => Number(part))
+        if (home > 4 || away > 4) continue
+        pushParsed(out, seen, 'Correct Score', `${home}-${away}`, price, null)
+      } else if (bet.id === ids.handicap) {
+        const match = /^(Home|Draw|Away)\s*([+-]?\d+(?:\.\d+)?)/i.exec(label)
+        if (!match) continue
+        const line = Number(match[2])
+        const side = match[1][0].toUpperCase() + match[1].slice(1).toLowerCase()
+        pushParsed(out, seen, `3-Way Handicap ${signed(line)}`, `${side} ${signed(line)}`, price, line)
+      } else if (bet.id === ids.asian) {
+        const match = /^(Home|Away)\s*([+-]?\d+(?:\.\d+)?)/i.exec(label)
+        if (!match) continue
+        const raw = Number(value.handicap ?? match[2])
+        if (!Number.isFinite(raw)) continue
+        const code = `2-Way Handicap ${signed(raw)}`
+        if (match[1].toLowerCase() === 'home') pushParsed(out, seen, code, `Home ${signed(raw)}`, price, raw)
+        else pushParsed(out, seen, code, `Away ${signed(-raw)}`, price, raw)
+      } else if (mode === 'prematch' && bet.id === PREMATCH.homeAway) {
+        const mapped = mapWinner(label)
+        if (mapped !== '1' && mapped !== '2') continue
+        pushParsed(out, seen, 'Home/Away', mapped, price, null)
+      } else if (bet.id === ids.dnb) {
+        const mapped = mapWinner(label)
+        if (mapped !== '1' && mapped !== '2') continue
+        pushParsed(out, seen, 'Draw No Bet', mapped, price, null)
+      } else if (bet.id === ids.oddEven) {
+        const side = label.toLowerCase()
+        if (side !== 'odd' && side !== 'even') continue
+        pushParsed(out, seen, 'Odd/Even', side === 'odd' ? 'Odd' : 'Even', price, null)
+      } else if (mode === 'prematch' && bet.id === PREMATCH.exactGoals && /^[0-9]+\+?$/.test(label)) {
+        pushParsed(out, seen, 'Exact Goals', label, price, null)
       }
-      const key = `${market}:${selection}`
-      if (seen.has(key)) continue
-      seen.add(key)
-      out.push({ market, selection, price, line })
-      if (out.length >= 24) return out
+      if (out.length >= 40) return out
     }
   }
   return out
@@ -113,7 +163,7 @@ export function parseApiFootballBookmakers(bookmakers: unknown): ParsedSelection
 type Fixture = {
   fixture?: { id?: number; date?: string; status?: { short?: string; elapsed?: number | null } }
   league?: { id?: number; name?: string; country?: string }
-  teams?: { home?: { name?: string }; away?: { name?: string } }
+  teams?: { home?: { id?: number; name?: string }; away?: { id?: number; name?: string } }
   goals?: { home?: number | null; away?: number | null }
 }
 
@@ -203,8 +253,8 @@ async function upsertFixture(cfg: AppConfig, fx: Fixture): Promise<{ id: number;
   const { rows } = await getPool(cfg).query<{ id: number; status: string }>(
     `INSERT INTO matches (
        sport, league, country, home, away, kickoff_at, status, minute, home_score, away_score,
-       api_fixture_id, source, league_id
-     ) VALUES ('Football', $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'api-football', $11)
+       api_fixture_id, source, league_id, api_home_id, api_away_id
+     ) VALUES ('Football', $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'api-football', $11, $12, $13)
      ON CONFLICT (api_fixture_id) DO UPDATE SET
        league = EXCLUDED.league,
        country = EXCLUDED.country,
@@ -221,9 +271,11 @@ async function upsertFixture(cfg: AppConfig, fx: Fixture): Promise<{ id: number;
          WHEN matches.status IN ('finished', 'void') THEN matches.away_score
          ELSE EXCLUDED.away_score
        END,
-       league_id = EXCLUDED.league_id
+       league_id = EXCLUDED.league_id,
+       api_home_id = COALESCE(EXCLUDED.api_home_id, matches.api_home_id),
+       api_away_id = COALESCE(EXCLUDED.api_away_id, matches.api_away_id)
      RETURNING id, status`,
-    [leagueName, country, home, away, kickoff, status, minute, homeScore, awayScore, fixtureId, leagueId],
+    [leagueName, country, home, away, kickoff, status, minute, homeScore, awayScore, fixtureId, leagueId, fx.teams?.home?.id ?? null, fx.teams?.away?.id ?? null],
   )
   return rows[0] ?? null
 }
@@ -247,7 +299,7 @@ async function writeOdds(cfg: AppConfig, matchId: number, selections: ParsedSele
   }
 }
 
-export async function syncApiFootball(cfg: AppConfig, actorId: string) {
+export async function syncApiFootball(cfg: AppConfig, actorId: string | null) {
   if (cfg.isTest) throw new ApiError(400, 'feed_disabled_in_test')
   const keys = await activeApiKeys(cfg)
   if (!keys.length) throw new ApiError(400, 'no_api_key')
@@ -309,6 +361,9 @@ export async function syncApiFootball(cfg: AppConfig, actorId: string) {
         voided += 1
         continue
       }
+      if (LIVE.has(short)) {
+        await getPool(cfg).query(`SELECT process_two_up($1)`, [saved.id])
+      }
     } catch {
       continue
     }
@@ -323,4 +378,34 @@ export async function syncApiFootball(cfg: AppConfig, actorId: string) {
     }
   }
   return { imported, settled, voided, oddsWritten, dates }
+}
+
+type LiveOdd = {
+  fixture?: { id?: number }
+  status?: { stopped?: boolean; blocked?: boolean; finished?: boolean }
+  odds?: { id?: number; values?: { value?: string; odd?: string; suspended?: boolean; handicap?: string }[] }[]
+}
+
+/** One /odds/live call. Skips stopped, blocked, and finished prices. */
+export async function refreshLiveOdds(cfg: AppConfig): Promise<{ updated: number }> {
+  if (cfg.isTest) return { updated: 0 }
+  const keys = await activeApiKeys(cfg)
+  if (!keys.length) return { updated: 0 }
+  const body = await apiGet('odds/live', {}, keys[0].apiKey) as { response?: LiveOdd[] }
+  let updated = 0
+  for (const entry of body.response ?? []) {
+    if (updated >= 8) break
+    const fixtureId = entry.fixture?.id
+    if (!fixtureId || entry.status?.stopped || entry.status?.blocked || entry.status?.finished) continue
+    const match = await getPool(cfg).query<{ id: number }>(
+      `SELECT id FROM matches WHERE api_fixture_id = $1 AND status = 'live'`,
+      [fixtureId],
+    )
+    if (!match.rows[0]) continue
+    const parsed = parseApiFootballBookmakers([{ bets: entry.odds }], 'live')
+    if (!parsed.length) continue
+    await writeOdds(cfg, match.rows[0].id, parsed)
+    updated += 1
+  }
+  return { updated }
 }

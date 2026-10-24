@@ -37,26 +37,54 @@ export const useSlip = defineStore('slip', {
     error: '',
     idempotencyKey: '',
     placing: false,
+    payoutPercentBps: 8800,
+    quotedPayout: 0,
+    quoteSeq: 0,
   }),
   getters: {
     combined: (s) => (s.items.length ? s.items.reduce((a, i) => a * i.price, 1) : 0),
-    payout: (s) => (s.items.length ? Math.round(s.items.reduce((a, i) => a * i.price, 1) * s.stake) : 0),
+    payout: (s) => s.quotedPayout,
   },
   actions: {
     async loadLimits() {
       try {
-        const data = await api<{ minStake: number; maxStake: number }>('/api/bets/limits')
+        const data = await api<{ minStake: number; maxStake: number; payoutPercentBps?: number }>('/api/bets/limits')
         this.minStake = data.minStake
         this.maxStake = data.maxStake
+        if (typeof data.payoutPercentBps === 'number' && Number.isInteger(data.payoutPercentBps)) {
+          this.payoutPercentBps = data.payoutPercentBps
+        }
         if (this.stake < data.minStake) this.stake = data.minStake
       } catch {
         // The form still shows the defaults from settings.
+      }
+      await this.refreshQuote()
+    },
+    async refreshQuote() {
+      const seq = ++this.quoteSeq
+      if (!this.items.length || !Number.isInteger(this.stake) || this.stake < 1) {
+        this.quotedPayout = 0
+        return
+      }
+      const params = new URLSearchParams()
+      params.set('stake', String(this.stake))
+      for (const item of this.items) params.append('price', String(item.price))
+      try {
+        const data = await api<{ potentialPayoutTzs: number; payoutPercentBps: number }>(`/api/bets/quote?${params}`)
+        if (seq !== this.quoteSeq) return
+        this.quotedPayout = data.potentialPayoutTzs
+        if (typeof data.payoutPercentBps === 'number' && Number.isInteger(data.payoutPercentBps)) {
+          this.payoutPercentBps = data.payoutPercentBps
+        }
+      } catch {
+        if (seq === this.quoteSeq) this.quotedPayout = 0
       }
     },
     setStake(value: number) {
       this.stake = Number.isFinite(value) ? Math.round(value) : 0
       this.idempotencyKey = ''
       this.error = ''
+      void this.refreshQuote()
     },
     toggle(m: { id: number; home: string; away: string }, o: { sel: string; price: number; oddsId?: number; market?: string }) {
       if (!o.oddsId) return
@@ -65,6 +93,7 @@ export const useSlip = defineStore('slip', {
       this.error = ''
       if (this.items.find((item) => item.key === key)) {
         this.items = this.items.filter((item) => item.key !== key)
+        void this.refreshQuote()
         return
       }
       this.items = this.items.filter((item) => item.matchId !== m.id)
@@ -77,11 +106,13 @@ export const useSlip = defineStore('slip', {
         oddsId: o.oddsId,
         market: o.market ?? '1X2',
       })
+      void this.refreshQuote()
     },
     clear() {
       this.items = []
       this.idempotencyKey = ''
       this.error = ''
+      this.quotedPayout = 0
     },
     async place() {
       const auth = useAuth()
