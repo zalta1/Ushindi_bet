@@ -1,11 +1,15 @@
 import type { PoolClient } from 'pg'
 import { money } from '../errors.js'
 
-/** PesaBetPro's default when the budget switch is off. The dice roll uses it only while the switch is on. */
+/**
+ * PesaBetPro's default when the budget switch is off.
+ * Dice uses this rate only while its switch is on.
+ * Mayan always calls `lossRate()`, so a disabled budget still returns 0.80.
+ */
 export const DEFAULT_LOSS_RATE = 0.8
 export const DEFAULT_BUDGET_TZS = 25_000
 
-export type CasinoGame = 'dice' | 'mines'
+export type CasinoGame = 'dice' | 'mines' | 'mayan'
 
 export type BudgetRow = {
   budgetTzs: number
@@ -17,6 +21,7 @@ export type BudgetRow = {
 const TABLES: Record<CasinoGame, string> = {
   dice: 'dice_budget',
   mines: 'mines_budget',
+  mayan: 'mayan_budget',
 }
 
 type SqlRow = {

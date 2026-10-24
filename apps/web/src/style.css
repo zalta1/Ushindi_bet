@@ -221,8 +221,8 @@ button.av-cash{width:100%;background:var(--gold);color:#10201a;font-weight:800;b
 .dice-board input[type=range]{width:100%}
 .dice-budget{margin-top:16px}
 .jackpot-form input[type=checkbox]{width:auto}
-.layout.dice-route,.layout.mines-route{grid-template-columns:240px minmax(0,1fr)}
-.layout.dice-route.collapsed,.layout.mines-route.collapsed{grid-template-columns:0 minmax(0,1fr)}
+.layout.dice-route,.layout.mines-route,.layout.mayan-route{grid-template-columns:240px minmax(0,1fr)}
+.layout.dice-route.collapsed,.layout.mines-route.collapsed,.layout.mayan-route.collapsed{grid-template-columns:0 minmax(0,1fr)}
 .mines{max-width:720px}
 .mines-board{text-align:center}
 .mines-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;max-width:420px;margin:12px auto}
@@ -233,8 +233,34 @@ button.av-cash{width:100%;background:var(--gold);color:#10201a;font-weight:800;b
 .mines-board .win{color:var(--accent);font-weight:800}
 .mines-board .loss{color:#ff5a5a;font-weight:800}
 .mines-board input[type=range]{width:100%}
+.mayan{max-width:720px}
+.mayan-board{text-align:center;background:linear-gradient(#1a0e00,#2d1800 42%,#0d0800);color:#fff;border-radius:16px;padding:12px 12px 16px}
+.mayan-wheel{position:relative;width:280px;max-width:100%;margin:0 auto}
+.mayan-wheel canvas{width:100%;height:auto;display:block;filter:drop-shadow(0 0 18px rgba(212,160,23,.35))}
+.mayan-hub{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;text-align:center;font-size:10px;font-weight:900;letter-spacing:.14em;color:#f6e7b2;white-space:pre-line;padding:0 78px}
+.mayan-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
+.mayan-overlay .win,.mayan-overlay .loss{background:rgba(0,0,0,.72);border-radius:16px;padding:14px 18px;display:flex;flex-direction:column;gap:4px}
+.mayan-overlay .win{color:#facc15}
+.mayan-overlay .loss{color:#ff8a8a}
+.mayan-targets{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-top:12px}
+.mayan-target{position:relative;border:2px solid rgba(139,105,20,.35);border-radius:10px;color:#fff;padding:8px 4px;min-height:72px;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.mayan-target.has{border-color:rgba(245,158,11,.7)}
+.mayan-target.hit{border-color:#facc15;box-shadow:0 0 0 2px rgba(250,204,21,.45)}
+.mayan-target:disabled{opacity:.7}
+.mayan-label{font-size:12px;font-weight:900}
+.mayan-emoji{font-size:22px;line-height:1.1}
+.mayan-chip-badge{position:absolute;top:-6px;right:-4px;background:#f59e0b;color:#111;font-size:9px;font-weight:800;border-radius:999px;padding:2px 5px}
+.mayan-controls{margin-top:12px}
+.mayan-chip-row{display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap;margin-top:8px}
+.mayan-round{width:44px;height:44px;border-radius:50%;background:rgba(120,53,15,.55);color:#f6e7b2;border:1px solid rgba(217,119,6,.4)}
+.mayan-spin{width:56px;height:56px;border-radius:50%;background:linear-gradient(#f59e0b,#ca8a04);color:#111;font-size:22px;border:2px solid rgba(251,191,36,.7)}
+.mayan-board select{width:auto;background:#78350f;color:#f6e7b2;border:1px solid rgba(217,119,6,.45);border-radius:8px;padding:8px}
+.mayan-board .win{color:#facc15;font-weight:900}
+.mayan-board .loss{color:#ff8a8a;font-weight:800}
 @media(max-width:900px){
-  .layout.dice-route,.layout.dice-route.collapsed,.layout.mines-route,.layout.mines-route.collapsed{grid-template-columns:1fr}
+  .layout.dice-route,.layout.dice-route.collapsed,.layout.mines-route,.layout.mines-route.collapsed,.layout.mayan-route,.layout.mayan-route.collapsed{grid-template-columns:1fr}
   .dice-roll{font-size:64px}
   .mines-cell{min-height:44px;font-size:18px}
+  .mayan-target{min-height:64px;padding:6px 2px}
+  .mayan-label{font-size:11px}
 }

@@ -58,6 +58,10 @@ export const operatorConfig = {
   minesMinStake: 100,
   minesMaxStake: 2_000_000,
   minesMaxWin: 10_000_000,
+  mayanEnabled: true,
+  mayanMinStake: 50,
+  mayanMaxStake: 2_000_000,
+  mayanMaxWin: 10_000_000,
   currency: 'TZS' as const,
 }
 
@@ -93,6 +97,9 @@ export const INT_SETTING_KEYS = [
   'minesMinStake',
   'minesMaxStake',
   'minesMaxWin',
+  'mayanMinStake',
+  'mayanMaxStake',
+  'mayanMaxWin',
 ] as const
 
 export const BOOL_SETTING_KEYS = [
@@ -106,6 +113,7 @@ export const BOOL_SETTING_KEYS = [
   'aviatorEnabled',
   'diceEnabled',
   'minesEnabled',
+  'mayanEnabled',
 ] as const
 
 export type IntSettingKey = (typeof INT_SETTING_KEYS)[number]
