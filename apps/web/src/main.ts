@@ -12,6 +12,7 @@ import Virtuals from './views/Virtuals.vue'
 import Casino from './views/Casino.vue'
 import Aviator from './views/Aviator.vue'
 import Dice from './views/Dice.vue'
+import Mines from './views/Mines.vue'
 import AviatorFair from './views/AviatorFair.vue'
 import Promotions from './views/Promotions.vue'
 import Search from './views/Search.vue'
@@ -38,6 +39,7 @@ const routes = [
   { path: '/casino', component: Casino },
   { path: '/aviator', component: Aviator },
   { path: '/dice', component: Dice },
+  { path: '/mines', component: Mines },
   { path: '/aviator/fair', component: AviatorFair },
   { path: '/crash', redirect: '/aviator' },
   { path: '/promotions', component: Promotions },
