@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import AdminAviator from '../components/AdminAviator.vue'
+import AdminJackpots from '../components/AdminJackpots.vue'
 import { ApiClientError, api } from '../api'
 import { useAuth } from '../stores/store'
 
@@ -16,7 +17,7 @@ type SectionId =
 const ready = new Set<SectionId>([
   'overview', 'users', 'banners', 'notifications', 'announcements',
   'wallet-audit', 'audit', 'account', 'admins', 'settings',
-  'match-api', 'matches', 'bets', 'two-up-markets', 'aviator',
+  'match-api', 'matches', 'bets', 'two-up-markets', 'aviator', 'jackpots',
 ])
 
 const menu: SectionId[] = [
@@ -875,6 +876,10 @@ async function deleteNote(id: string) {
 
     <section v-else-if="section === 'aviator'">
       <AdminAviator />
+    </section>
+
+    <section v-else-if="section === 'jackpots'">
+      <AdminJackpots />
     </section>
 
     <section v-else-if="section === 'notifications'" data-testid="admin-notifications">

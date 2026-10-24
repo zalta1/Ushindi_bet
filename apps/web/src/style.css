@@ -195,3 +195,19 @@ button.av-cash{width:100%;background:var(--gold);color:#10201a;font-weight:800;b
 @media(max-width:700px){
   .av-panels{grid-template-columns:minmax(0,1fr)}
 }
+
+.jackpot-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
+.jackpot-card{background:var(--card);border-radius:12px;padding:14px}
+.jackpot-count{font-variant-numeric:tabular-nums;color:var(--gold);font-weight:800;font-size:28px;margin:6px 0}
+.jackpot-match{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;padding:8px 0;border-top:1px solid #243f6b}
+.jackpot-match.missing{outline:1px solid #ff5a5a;border-radius:8px;padding:8px}
+.jackpot-picks{display:flex;gap:6px}
+.jackpot-picks button{min-width:52px}
+.jackpot-picks button.on{outline:2px solid var(--gold)}
+.jackpot-picks small{display:block;color:var(--muted)}
+.jackpot-form{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.jackpot-fixture{display:flex;gap:8px;align-items:flex-start;margin:6px 0}
+.jackpot-fixture input{width:auto;margin:4px 0 0}
+@media(max-width:900px){
+  .jackpot-match,.jackpot-form{grid-template-columns:minmax(0,1fr)}
+}
