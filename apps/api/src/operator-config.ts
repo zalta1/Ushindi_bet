@@ -26,6 +26,13 @@ export const operatorConfig = {
   rtpBps: 9700,
   withdrawalsEnabled: true,
   cashoutEnabled: false,
+  cashoutMarginBps: 1200,
+  feedSyncEnabled: false,
+  lifecycleEnabled: false,
+  hotMatchesAuto: false,
+  feedSyncIntervalSec: 300,
+  liveOddsIntervalSec: 60,
+  lifecycleIntervalSec: 30,
   welcomeBonusEnabled: false,
   welcomeBonusTzs: 0,
   securityDepositTzs: 0,
@@ -47,11 +54,18 @@ export const INT_SETTING_KEYS = [
   'welcomeBonusTzs',
   'securityDepositTzs',
   'securityUnlockTzs',
+  'cashoutMarginBps',
+  'feedSyncIntervalSec',
+  'liveOddsIntervalSec',
+  'lifecycleIntervalSec',
 ] as const
 
 export const BOOL_SETTING_KEYS = [
   'withdrawalsEnabled',
   'cashoutEnabled',
+  'feedSyncEnabled',
+  'lifecycleEnabled',
+  'hotMatchesAuto',
   'welcomeBonusEnabled',
   'maintenanceMode',
 ] as const

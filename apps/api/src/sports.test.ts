@@ -3,6 +3,7 @@ import { after, before, beforeEach, test } from 'node:test'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseApiFootballBookmakers } from './sports/feed.js'
+import { runSportsCycle } from './sports/worker.js'
 
 process.env.NODE_ENV = 'test'
 process.env.COOKIE_SECURE = 'false'
@@ -61,6 +62,13 @@ beforeEach(async () => {
     rtpBps: 9700,
     withdrawalsEnabled: true,
     cashoutEnabled: false,
+    cashoutMarginBps: 1200,
+    feedSyncEnabled: false,
+    lifecycleEnabled: false,
+    hotMatchesAuto: false,
+    feedSyncIntervalSec: 300,
+    liveOddsIntervalSec: 60,
+    lifecycleIntervalSec: 30,
     welcomeBonusEnabled: false,
     welcomeBonusTzs: 0,
     securityDepositTzs: 0,
@@ -333,4 +341,245 @@ test('a multi loses on one lost leg and stays open until every leg is settled', 
   const later = await admin.client.send('POST', `/api/admin/matches/${loseAway.id}/settle`, { homeScore: 3, awayScore: 0 })
   assert.equal(later.json.creditedTzs, 0)
   assert.equal(await balanceOf(player.client), afterLoseStake)
+})
+
+async function addSelection(admin: Client, matchId: number, market: string, selection: string, price: number, line?: number) {
+  const res = await admin.send('POST', `/api/admin/matches/${matchId}/odds`, { market, selection, price, line })
+  assert.equal(res.status, 200, JSON.stringify(res.json))
+  return res.json.id as number
+}
+
+test('anonymous callers cannot use the old sandbox settle, payment, crash, or uo feeds', async () => {
+  for (const url of ['/api/settle/1', '/api/payments/deposit', '/api/crash/start']) {
+    const res = await app.inject({ method: 'POST', url, payload: { amount: 1000, provider: 'M-Pesa' } })
+    assert.equal(res.statusCode, 401, url)
+  }
+  for (const url of ['/v1/uo/matches', '/v1/uo/sports', '/v1/uo/totalMatches', '/v1/uo/sport']) {
+    const res = await app.inject({ method: 'GET', url })
+    assert.equal(res.statusCode, 401, url)
+  }
+  const player = await register()
+  const feed = await player.client.send('GET', '/v1/uo/matches')
+  assert.equal(feed.status, 200)
+  assert.equal(feed.json.meta.sandbox, true)
+  const crash = await player.client.send('POST', '/api/crash/start', {})
+  assert.equal(crash.status, 403)
+  const admin = await register()
+  await pool.query(`UPDATE users SET role = 'admin' WHERE id = $1`, [admin.id])
+  const allowed = await admin.client.send('POST', '/api/crash/start', { clientSeed: 'test' })
+  assert.equal(allowed.status, 200)
+  assert.equal(typeof allowed.json.verify.serverSeed, 'string')
+})
+
+test('correct score, handicaps, draw no bet, and the other full-time markets settle', async () => {
+  const { player, admin } = await adminAndPlayer()
+  const match = await createMatch(admin.client, 'Testhome Markets', 2)
+  const scoreId = await addSelection(admin.client, match.id, 'Correct Score', '2-1', 8)
+  const homeH = await addSelection(admin.client, match.id, '3-Way Handicap -1', 'Home -1', 3.4, -1)
+  const drawH = await addSelection(admin.client, match.id, '3-Way Handicap -1', 'Draw -1', 3.3, -1)
+  const asian = await addSelection(admin.client, match.id, '2-Way Handicap -1', 'Home -1', 1.9, -1)
+  const dnb = await addSelection(admin.client, match.id, 'Draw No Bet', '1', 1.5)
+  const odd = await addSelection(admin.client, match.id, 'Odd/Even', 'Odd', 1.9)
+  const exact = await addSelection(admin.client, match.id, 'Exact Goals', '3+', 2.5)
+
+  const wonScore = await place(player.client, [{ oddsId: scoreId, price: 8 }], 1000)
+  assert.equal(wonScore.status, 200)
+  const settled = await admin.client.send('POST', `/api/admin/matches/${match.id}/settle`, { homeScore: 2, awayScore: 1 })
+  assert.equal(settled.status, 200)
+  assert.equal(settled.json.creditedTzs, 8000)
+
+  const push = await createMatch(admin.client, 'Testhome Asian', 2)
+  await addSelection(admin.client, push.id, '2-Way Handicap -1', 'Home -1', 1.9, -1)
+  const pushOdd = await pool.query<{ id: number; price: string }>(
+    `SELECT o.id, o.price::text FROM odds o JOIN markets mk ON mk.id = o.market_id WHERE mk.match_id = $1 AND mk.code = '2-Way Handicap -1' AND o.selection = 'Home -1'`,
+    [push.id],
+  )
+  const pushBet = await place(player.client, [{ oddsId: pushOdd.rows[0].id, price: Number(pushOdd.rows[0].price) }], 1000)
+  assert.equal(pushBet.status, 200)
+  const before = await balanceOf(player.client)
+  const pushed = await admin.client.send('POST', `/api/admin/matches/${push.id}/settle`, { homeScore: 1, awayScore: 0 })
+  assert.equal(pushed.json.creditedTzs, 1000)
+  assert.equal(await balanceOf(player.client), before + 1000)
+
+  const three = await createMatch(admin.client, 'Testhome Three', 2)
+  const drawOdd = await addSelection(admin.client, three.id, '3-Way Handicap -1', 'Draw -1', 3.3, -1)
+  await place(player.client, [{ oddsId: drawOdd, price: 3.3 }], 1000)
+  const threeSettle = await admin.client.send('POST', `/api/admin/matches/${three.id}/settle`, { homeScore: 1, awayScore: 0 })
+  assert.equal(threeSettle.json.creditedTzs, 3300)
+
+  const dnbMatch = await createMatch(admin.client, 'Testhome Dnb', 2)
+  const dnbOdd = await addSelection(admin.client, dnbMatch.id, 'Draw No Bet', '1', 1.5)
+  await place(player.client, [{ oddsId: dnbOdd, price: 1.5 }], 1000)
+  const dnbSettle = await admin.client.send('POST', `/api/admin/matches/${dnbMatch.id}/settle`, { homeScore: 1, awayScore: 1 })
+  assert.equal(dnbSettle.json.creditedTzs, 1000)
+
+  const goals = await createMatch(admin.client, 'Testhome Goals', 2)
+  const oddId = await addSelection(admin.client, goals.id, 'Odd/Even', 'Odd', 1.9)
+  const exactId = await addSelection(admin.client, goals.id, 'Exact Goals', '3+', 2.5)
+  await place(player.client, [{ oddsId: oddId, price: 1.9 }], 1000)
+  const oddSettle = await admin.client.send('POST', `/api/admin/matches/${goals.id}/settle`, { homeScore: 1, awayScore: 0 })
+  assert.equal(oddSettle.json.creditedTzs, 1900)
+  const many = await createMatch(admin.client, 'Testhome Exact', 2)
+  const manyId = await addSelection(admin.client, many.id, 'Exact Goals', '3+', 2.5)
+  await place(player.client, [{ oddsId: manyId, price: 2.5 }], 1000)
+  const manySettle = await admin.client.send('POST', `/api/admin/matches/${many.id}/settle`, { homeScore: 2, awayScore: 2 })
+  assert.equal(manySettle.json.creditedTzs, 2500)
+  assert.ok(homeH && asian && odd && exact && exactId)
+})
+
+test('API-Football correct score and handicap ids map onto settleable markets', () => {
+  const parsed = parseApiFootballBookmakers([
+    {
+      id: 8,
+      bets: [
+        { id: 10, values: [{ value: '2-1', odd: '9.50' }, { value: '9-0', odd: '50' }] },
+        { id: 4, values: [{ value: 'Home -1', odd: '3.40' }, { value: 'Draw -1', odd: '3.30' }] },
+        { id: 33, values: [{ value: 'Home -0.5', odd: '1.80', handicap: '-0.5' }, { value: 'Away -0.5', odd: '2.00', handicap: '-0.5' }] },
+        { id: 29, values: [{ value: 'Home', odd: '1.40' }, { value: 'Away', odd: '2.80' }] },
+      ],
+    },
+  ])
+  const bySel = Object.fromEntries(parsed.map((row) => [`${row.market}:${row.selection}`, row.price]))
+  assert.equal(bySel['Correct Score:2-1'], 9.5)
+  assert.equal(bySel['Correct Score:9-0'], undefined)
+  assert.equal(bySel['3-Way Handicap -1:Home -1'], 3.4)
+  assert.equal(bySel['2-Way Handicap -0.5:Away +0.5'], 2)
+  assert.equal(bySel['Draw No Bet:1'], 1.4)
+})
+
+test('hot matches are an admin flag and show on the public list', async () => {
+  const listed = await app.inject({ method: 'GET', url: '/api/matches' })
+  const simba = listed.json().find((match: { home: string }) => match.home === 'Simba SC')
+  assert.equal(simba.hot, true)
+  const { admin } = await adminAndPlayer()
+  const match = await createMatch(admin.client, 'Testhome Hot', 2)
+  const on = await admin.client.send('POST', `/api/admin/matches/${match.id}/hot`, { hot: true })
+  assert.equal(on.status, 200)
+  const again = await app.inject({ method: 'GET', url: '/api/matches' })
+  const row = again.json().find((item: { id: number }) => item.id === match.id)
+  assert.equal(row.hot, true)
+  const audit = await pool.query(`SELECT action FROM audit_log WHERE action = 'matches.hot'`)
+  assert.equal(audit.rows.length, 1)
+})
+
+test('match details fall back without calling API-Football when there is no key', async () => {
+  const listed = await app.inject({ method: 'GET', url: '/api/matches' })
+  const simba = listed.json().find((match: { home: string }) => match.home === 'Simba SC')
+  const res = await app.inject({ method: 'GET', url: `/api/matches/${simba.id}` })
+  assert.equal(res.statusCode, 200)
+  assert.equal(res.json().details.source, 'sample')
+  assert.ok(res.json().details.events.length >= 1)
+  assert.ok(res.json().details.lineups.home.length >= 1)
+  assert.ok(res.json().markets['Correct Score'])
+  const { admin } = await adminAndPlayer()
+  const match = await createMatch(admin.client, 'Testhome Details', 2)
+  const bare = await app.inject({ method: 'GET', url: `/api/matches/${match.id}` })
+  assert.equal(bare.json().details.source, 'unavailable')
+  assert.deepEqual(bare.json().details.events, [])
+  assert.ok(bare.json().markets['1X2'])
+})
+
+test('2UP pays a single early, does not pay twice, and a VAR reversal debits the ledger', async () => {
+  const { player, admin } = await adminAndPlayer()
+  const match = await createMatch(admin.client, 'Testhome Two', 2)
+  const saved = await admin.client.send('POST', `/api/admin/matches/${match.id}/two-up`, {
+    enabled: true,
+    homeOdds: 2,
+    drawOdds: 3.2,
+    awayOdds: 3.4,
+    team: 'both',
+  })
+  assert.equal(saved.status, 200, JSON.stringify(saved.json))
+  const home = saved.json.odds.find((row: { selection: string }) => row.selection === '1')
+  const placed = await place(player.client, [{ oddsId: home.id, price: 2 }], 1000)
+  assert.equal(placed.status, 200)
+  const afterStake = await balanceOf(player.client)
+  const early = await admin.client.send('POST', `/api/admin/matches/${match.id}/score`, { homeScore: 2, awayScore: 0, minute: 30 })
+  assert.equal(early.status, 200, JSON.stringify(early.json))
+  assert.equal(early.json.paid, 1)
+  assert.equal(await balanceOf(player.client), afterStake + 2000)
+  const again = await admin.client.send('POST', `/api/admin/matches/${match.id}/score`, { homeScore: 2, awayScore: 0, minute: 40 })
+  assert.equal(again.json.paid, 0)
+  assert.equal(await balanceOf(player.client), afterStake + 2000)
+  const reversed = await admin.client.send('POST', `/api/admin/matches/${match.id}/score`, { homeScore: 1, awayScore: 0, minute: 44 })
+  assert.equal(reversed.json.reversed, 1)
+  assert.equal(await balanceOf(player.client), afterStake)
+  const draw = saved.json.odds.find((row: { selection: string }) => row.selection === 'X')
+  await place(player.client, [{ oddsId: draw.id, price: 3.2 }], 1000)
+  const beforeDraw = await balanceOf(player.client)
+  const notEarly = await admin.client.send('POST', `/api/admin/matches/${match.id}/score`, { homeScore: 2, awayScore: 0, minute: 50 })
+  assert.equal(notEarly.json.paid, 1)
+  const mine = await player.client.send('GET', '/api/bets?status=open')
+  assert.ok(mine.json.data.some((bet: { legs: { selection: string }[] }) => bet.legs.some((leg) => leg.selection === 'X')))
+  assert.equal(await balanceOf(player.client), beforeDraw + 2000)
+})
+
+test('cashout recomputes on the server, credits once, and stops after settlement or suspension', async () => {
+  const { player, admin } = await adminAndPlayer()
+  operatorConfig.cashoutEnabled = true
+  operatorConfig.cashoutMarginBps = 1200
+  const match = await createMatch(admin.client, 'Testhome Cash', 2)
+  const placed = await place(player.client, [{ oddsId: match.oddsId, price: match.price }], 1000)
+  assert.equal(placed.status, 200)
+  const quote = await player.client.send('GET', `/api/bets/${placed.json.betId}/cashout`)
+  assert.equal(quote.json.cashoutTzs, 880)
+  const off = operatorConfig.cashoutEnabled
+  operatorConfig.cashoutEnabled = false
+  const blocked = await player.client.send('POST', `/api/bets/${placed.json.betId}/cashout`, { expectedTzs: 880 })
+  assert.equal(blocked.status, 403)
+  operatorConfig.cashoutEnabled = off
+  const stale = await player.client.send('POST', `/api/bets/${placed.json.betId}/cashout`, { expectedTzs: 100 })
+  assert.equal(stale.status, 409)
+  const before = await balanceOf(player.client)
+  const paid = await player.client.send('POST', `/api/bets/${placed.json.betId}/cashout`, { expectedTzs: 880 })
+  assert.equal(paid.status, 200, JSON.stringify(paid.json))
+  assert.equal(paid.json.creditedTzs, 880)
+  assert.equal(await balanceOf(player.client), before + 880)
+  const replay = await player.client.send('POST', `/api/bets/${placed.json.betId}/cashout`, { expectedTzs: 880 })
+  assert.equal(replay.status, 200)
+  assert.equal(replay.json.idempotent, true)
+  assert.equal(await balanceOf(player.client), before + 880)
+
+  const suspended = await createMatch(admin.client, 'Testhome Suspend', 2)
+  const open = await place(player.client, [{ oddsId: suspended.oddsId, price: suspended.price }], 1000)
+  await pool.query(`UPDATE odds SET suspended = true WHERE id = $1`, [suspended.oddsId])
+  const denied = await player.client.send('POST', `/api/bets/${open.json.betId}/cashout`, { expectedTzs: 880 })
+  assert.equal(denied.status, 409)
+
+  const finished = await createMatch(admin.client, 'Testhome After', 2)
+  const last = await place(player.client, [{ oddsId: finished.oddsId, price: finished.price }], 1000)
+  await admin.client.send('POST', `/api/admin/matches/${finished.id}/settle`, { homeScore: 1, awayScore: 0 })
+  const closed = await player.client.send('POST', `/api/bets/${last.json.betId}/cashout`, { expectedTzs: 880 })
+  assert.equal(closed.status, 409)
+})
+
+test('the lifecycle worker starts a match once and settles full time once', async () => {
+  const { admin } = await adminAndPlayer()
+  const kept = await pool.query<{ id: number; kickoff_at: Date; minute: number }>(
+    `SELECT id, kickoff_at, minute FROM matches WHERE status IN ('live', 'upcoming') AND home NOT LIKE 'Testhome%'`,
+  )
+  await pool.query(
+    `UPDATE matches SET kickoff_at = now() + interval '2 days' WHERE id = ANY($1::int[])`,
+    [kept.rows.map((row) => row.id)],
+  )
+  const match = await createMatch(admin.client, 'Testhome Clock', 2)
+  await pool.query(`UPDATE matches SET kickoff_at = now() - interval '10 minutes', status = 'upcoming', minute = 0 WHERE id = $1`, [match.id])
+  operatorConfig.lifecycleEnabled = true
+  operatorConfig.feedSyncEnabled = false
+  const first = await runSportsCycle(cfg, { force: true })
+  assert.equal(first.skipped, false)
+  const live = await pool.query<{ status: string }>(`SELECT status FROM matches WHERE id = $1`, [match.id])
+  assert.equal(live.rows[0].status, 'live')
+  await pool.query(`UPDATE matches SET kickoff_at = now() - interval '100 minutes', home_score = 0, away_score = 0 WHERE id = $1`, [match.id])
+  const second = await runSportsCycle(cfg, { force: true })
+  assert.equal(second.skipped, false)
+  const done = await pool.query<{ status: string }>(`SELECT status FROM matches WHERE id = $1`, [match.id])
+  assert.equal(done.rows[0].status, 'finished')
+  const third = await runSportsCycle(cfg, { force: true })
+  assert.equal((third.detail as { lifecycle?: { settled?: number } }).lifecycle?.settled, 0)
+  const runs = await pool.query(`SELECT count(*)::int AS n FROM feed_runs WHERE job = 'sports-cycle' AND ok`)
+  assert.ok(runs.rows[0].n >= 3)
+  for (const row of kept.rows) {
+    await pool.query(`UPDATE matches SET kickoff_at = $2, minute = $3 WHERE id = $1 AND status <> 'finished'`, [row.id, row.kickoff_at, row.minute])
+  }
 })

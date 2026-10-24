@@ -1,5 +1,6 @@
 import type { AppConfig } from '../config.js'
 import { getPool } from '../db.js'
+import { operatorConfig } from '../operator-config.js'
 
 export type Outcome = {
   sel: string
@@ -23,6 +24,7 @@ export type PublicMatch = {
   as: number
   status: string
   source: string
+  hot: boolean
   marketsCount: number
   odds: Outcome[]
   markets: Record<string, Outcome[]>
@@ -41,6 +43,7 @@ type Row = {
   home_score: number
   away_score: number
   source: string
+  is_hot_match: boolean
   market_code: string | null
   odds_id: number | null
   selection: string | null
@@ -67,6 +70,7 @@ function group(rows: Row[], includeSuspended: boolean): PublicMatch[] {
         as: row.away_score ?? 0,
         status: row.status,
         source: row.source ?? 'manual',
+        hot: Boolean(row.is_hot_match),
         marketsCount: 0,
         odds: [],
         markets: {},
@@ -96,22 +100,32 @@ function group(rows: Row[], includeSuspended: boolean): PublicMatch[] {
 
 const select = `
   SELECT m.id, m.sport, m.league, m.country, m.home, m.away, m.kickoff_at, m.status,
-         m.minute, m.home_score, m.away_score, m.source,
+         m.minute, m.home_score, m.away_score, m.source, m.is_hot_match,
          mk.code AS market_code, o.id AS odds_id, o.selection, o.price, o.suspended
     FROM matches m
     LEFT JOIN markets mk ON mk.match_id = m.id
     LEFT JOIN odds o ON o.market_id = mk.id
 `
 
+function applyAutoHot(matches: PublicMatch[]): PublicMatch[] {
+  if (!operatorConfig.hotMatchesAuto) return matches
+  let left = 3
+  return matches.map((match) => {
+    if (match.hot || !match.live || left <= 0) return match
+    left -= 1
+    return { ...match, hot: true }
+  })
+}
+
 export async function listPublicMatches(cfg: AppConfig, liveOnly = false): Promise<PublicMatch[]> {
   const { rows } = await getPool(cfg).query<Row>(
     `${select}
       WHERE m.status IN ('upcoming', 'live')
         AND ($1::boolean = false OR m.status = 'live')
-      ORDER BY (m.status = 'live') DESC, m.kickoff_at, m.id, mk.id, o.id`,
+      ORDER BY m.is_hot_match DESC, (m.status = 'live') DESC, m.kickoff_at, m.id, mk.id, o.id`,
     [liveOnly],
   )
-  return group(rows, false)
+  return applyAutoHot(group(rows, false))
 }
 
 export async function getPublicMatch(cfg: AppConfig, id: number): Promise<PublicMatch | null> {

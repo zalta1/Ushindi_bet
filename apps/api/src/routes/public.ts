@@ -1,5 +1,7 @@
 import crypto from 'node:crypto'
-import type { FastifyInstance } from 'fastify'
+import type { FastifyInstance, FastifyRequest } from 'fastify'
+import { isAdminRole } from '../admin/roles.js'
+import { ApiError } from '../errors.js'
 import { applyMargin, operatorConfig } from '../operator-config.js'
 
 export interface PaymentProvider {
@@ -99,9 +101,19 @@ export const sportsList = [
   liveMatches: matches.filter((m) => m.sport === s.name && m.live).length,
 }))
 
+function requireSandboxAdmin(req: FastifyRequest) {
+  if (!req.auth) throw new ApiError(401, 'unauthenticated')
+  if (!isAdminRole(req.auth.role) || req.auth.readOnly) throw new ApiError(403, 'forbidden')
+}
+
+function requireSession(req: FastifyRequest) {
+  if (!req.auth) throw new ApiError(401, 'unauthenticated')
+}
+
 export function registerPublicRoutes(app: FastifyInstance) {
   app.get('/api/crash/current', async () => ({ serverSeedHash: currentHash, nonce, rtp: 0.97, publishedRtp: '97%' }))
   app.post('/api/crash/start', async (req) => {
+    requireSandboxAdmin(req)
     const body = (req.body ?? {}) as { clientSeed?: string; cashOutAt?: number }
     const clientSeed = body.clientSeed ?? 'ushindi'
     const mult = crashPoint(serverSeed, clientSeed, nonce)
@@ -125,6 +137,7 @@ export function registerPublicRoutes(app: FastifyInstance) {
     }
   })
   app.post('/api/payments/:kind', async (req) => {
+    requireSandboxAdmin(req)
     const kind = (req.params as { kind: string }).kind
     const body = (req.body ?? {}) as { provider?: string; amount?: number; phone?: string }
     const provider = body.provider ?? 'M-Pesa'
@@ -140,6 +153,7 @@ export function registerPublicRoutes(app: FastifyInstance) {
     return { ...result, provider, amount, currency: 'TZS', sandbox: true, ledger: false }
   })
   app.post('/api/settle/:id', async (req) => {
+    requireSandboxAdmin(req)
     const id = Number((req.params as { id: string }).id)
     audit.push({ actor: 'official-results', action: 'settle', matchId: id, at: new Date().toISOString() })
     return { result: 'settled_from_official_result_append_only_ledger', sandbox: true }
@@ -155,7 +169,9 @@ export function registerPublicRoutes(app: FastifyInstance) {
     const limit = Number(query.limit || 10)
     return out.slice((page - 1) * limit, (page - 1) * limit + limit)
   }
-  app.get('/v1/uo/matches', async (req) => ({
+  app.get('/v1/uo/matches', async (req) => {
+    requireSession(req)
+    return {
     data: v1Matches(req.query as { sport_id?: string; live?: string; tab?: string; page?: string; limit?: string }),
     meta: {
       total: matches.length,
@@ -166,17 +182,24 @@ export function registerPublicRoutes(app: FastifyInstance) {
       sandbox: true,
       source: 'mock licensed-feed adapter with operator margin',
     },
-  }))
-  app.get('/v1/uo/sports', async () => ({
-    data: sportsList,
-    meta: { total: sportsList.length, live: matches.filter((m) => m.live).length },
-  }))
-  app.get('/v1/uo/totalMatches', async () => ({
-    totalMatches: matches.length,
-    liveMatches: matches.filter((m) => m.live).length,
-    bySport: sportsList.map((s) => ({ sport_id: s.id, name: s.name, total: s.totalMatches, live: s.liveMatches })),
-  }))
+  } })
+  app.get('/v1/uo/sports', async (req) => {
+    requireSession(req)
+    return {
+      data: sportsList,
+      meta: { total: sportsList.length, live: matches.filter((m) => m.live).length },
+    }
+  })
+  app.get('/v1/uo/totalMatches', async (req) => {
+    requireSession(req)
+    return {
+      totalMatches: matches.length,
+      liveMatches: matches.filter((m) => m.live).length,
+      bySport: sportsList.map((s) => ({ sport_id: s.id, name: s.name, total: s.totalMatches, live: s.liveMatches })),
+    }
+  })
   app.get('/v1/uo/sport', async (req) => {
+    requireSession(req)
     const id = Number((req.query as { id?: string }).id || 14)
     const sport = sportsList.find((item) => item.id === id)
     return { data: sport ?? null, matches: matches.filter((m) => m.sport === sport?.name), meta: { sport_id: id } }

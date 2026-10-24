@@ -173,7 +173,11 @@ export function registerAdminRoutes(app: FastifyInstance, cfg: AppConfig) {
     }
     if (next.minDeposit < 1) throw new ApiError(400, 'validation', { fields: { minDeposit: 'min' } })
     if (next.marginBps > 5000) throw new ApiError(400, 'validation', { fields: { marginBps: 'max' } })
+    if (next.cashoutMarginBps > 5000) throw new ApiError(400, 'validation', { fields: { cashoutMarginBps: 'max' } })
     if (next.rtpBps < 9000 || next.rtpBps > 10000) throw new ApiError(400, 'validation', { fields: { rtpBps: 'range' } })
+    for (const key of ['feedSyncIntervalSec', 'liveOddsIntervalSec', 'lifecycleIntervalSec'] as const) {
+      if (next[key] < 15 || next[key] > 86_400) throw new ApiError(400, 'validation', { fields: { [key]: 'range' } })
+    }
     Object.assign(operatorConfig, next)
     try {
       await saveOperatorSettings(cfg, req.auth!.userId)

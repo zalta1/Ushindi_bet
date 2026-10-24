@@ -27,6 +27,8 @@ The phone in `ADMIN_PHONE` (or `SUPER_ADMIN_PHONE`) is created as `admin` on sta
 
 Sports prices are checked again on the server when a bet is placed. The stake goes through `place_bet_atomic`. An admin settles a match by entering the score, or voids it. Either one credits a win or refunds a void through the ledger, once. Doing it again does not move money. PesaBetPro's feed is API-Football (`api-sports.io`, header `x-apisports-key`). Put a key in Match API, or in `API_SPORTS_KEY`. With no key, add matches and odds by hand. Seeded Ligi Kuu, Premier League, and Serie A rows are there so the sports page is not empty.
 
+Correct score, 3-way handicap, Asian handicap, draw no bet, odd/even, home/away, and exact goals settle from the final score. A full-time win still pays the quoted amount. Cash out, when an admin turns it on, pays `floor(stake × each leg's factor × (1 − cashout margin))` with a default margin of 1200 (12%). 2UP pays a single `stake × odds` once a team leads by two before the 88th minute, and a VAR reversal debits that payout. The API can poll API-Football, start matches, advance the live minute, and settle full time. Those jobs stay off until an admin enables them in Settings. Only one worker holds the database lock. `POST /api/settle/:id`, `POST /api/payments/:kind`, and `POST /api/crash/start` require an admin. The old `/v1/uo/*` mock feeds require a signed-in session and do not move money.
+
 If you previously started the old demo stack, reset the database volume once:
 
 ```bash
