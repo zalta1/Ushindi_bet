@@ -136,6 +136,21 @@ export async function buildApp(overrides: Partial<AppConfig> = {}): Promise<Fast
     if (path === '/api/auth/impersonation/stop' || path === '/api/auth/logout') return
     throw new ApiError(403, 'read_only')
   })
+  // A temporary password can only refresh the session, read /me, log out, or set a new password.
+  const passwordChangeAllow = new Set([
+    '/health',
+    '/api/auth/csrf',
+    '/api/auth/me',
+    '/api/auth/logout',
+    '/api/auth/refresh',
+    '/api/auth/set-password',
+  ])
+  app.addHook('preHandler', async (req) => {
+    if (!req.auth?.mustChangePassword) return
+    const path = req.url.split('?')[0]
+    if (passwordChangeAllow.has(path)) return
+    throw new ApiError(403, 'password_change_required')
+  })
   app.addHook('onClose', async () => {
     if (redis) await redis.quit().catch(() => undefined)
   })

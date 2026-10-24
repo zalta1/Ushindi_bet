@@ -13,6 +13,7 @@ export type SessionUser = {
   permissions: string[]
   readOnly?: boolean
   impersonatorUserId?: string | null
+  mustChangePassword?: boolean
 }
 
 let boot: Promise<void> | null = null
@@ -194,6 +195,13 @@ export const useAuth = defineStore('auth', {
       } finally {
         this.user = null
       }
+    },
+    async setPassword(newPassword: string) {
+      const data = await api<{ user: SessionUser }>('/api/auth/set-password', {
+        method: 'POST',
+        json: { newPassword },
+      })
+      this.user = data.user
     },
     async changePassword(currentPassword: string, newPassword: string) {
       const data = await api<{ user: SessionUser }>('/api/auth/change-password', {

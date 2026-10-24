@@ -15,6 +15,7 @@ import AviatorFair from './views/AviatorFair.vue'
 import Promotions from './views/Promotions.vue'
 import Search from './views/Search.vue'
 import Auth from './views/Auth.vue'
+import SetPassword from './views/SetPassword.vue'
 import Profile from './views/Profile.vue'
 import Money from './views/Money.vue'
 import Transactions from './views/Transactions.vue'
@@ -42,6 +43,7 @@ const routes = [
   { path: '/login', component: Auth },
   { path: '/register', component: Auth },
   { path: '/forgot', component: Auth },
+  { path: '/set-password', component: SetPassword },
   { path: '/profile', component: Profile },
   { path: '/deposit', component: Money },
   { path: '/withdraw', component: Money },
@@ -61,6 +63,12 @@ const router = createRouter({ history: createWebHistory(), routes })
 router.beforeEach(async (to) => {
   const auth = useAuth(pinia)
   if (!auth.bootstrapped) await auth.bootstrap()
+  const mustChange = Boolean(auth.user?.mustChangePassword)
+  if (mustChange && to.path !== '/set-password') return { path: '/set-password' }
+  if (to.path === '/set-password') {
+    if (!auth.user) return { path: '/login', query: { next: '/set-password' } }
+    if (!mustChange) return { path: '/' }
+  }
   if (to.path === '/admin' && !auth.user) return { path: '/login', query: { next: to.fullPath } }
 })
 

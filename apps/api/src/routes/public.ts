@@ -104,7 +104,18 @@ function requireSession(req: FastifyRequest) {
   if (!req.auth) throw new ApiError(401, 'unauthenticated')
 }
 
+function supportContact(raw: string): { whatsapp: string | null; url: string | null } {
+  const trimmed = raw.trim()
+  if (!trimmed) return { whatsapp: null, url: null }
+  let digits = trimmed.replace(/\D/g, '')
+  if (digits.startsWith('0') && digits.length === 10) digits = `255${digits.slice(1)}`
+  if (digits.length < 9 || digits.length > 15) return { whatsapp: trimmed, url: null }
+  return { whatsapp: trimmed, url: `https://wa.me/${digits}` }
+}
+
 export function registerPublicRoutes(app: FastifyInstance) {
+  app.get('/api/support-contact', async () => supportContact(operatorConfig.agentWhatsapp))
+
   app.get('/api/crash/current', async (req) => {
     crashSandboxGone(req)
   })

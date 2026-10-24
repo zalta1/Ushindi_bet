@@ -1,10 +1,11 @@
-import { randomUUID } from 'node:crypto'
+import { randomInt, randomUUID } from 'node:crypto'
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 import type { PoolClient } from 'pg'
 import type { AppConfig } from '../config.js'
 import { getPool, withTx } from '../db.js'
 import { ApiError, money } from '../errors.js'
-import { normalizeTzPhone } from '../identity.js'
+import { normalizeTzPhone, passwordProblem } from '../identity.js'
+import { hashPassword } from '../passwords.js'
 import { assertAviatorRanges } from '../aviator/settings.js'
 import { BOOL_SETTING_KEYS, INT_SETTING_KEYS, operatorConfig } from '../operator-config.js'
 import { assertCsrf, assertOrigin, beginImpersonation } from '../auth/sessions.js'
@@ -12,6 +13,16 @@ import { isAdminRole, isAccountRole, permissionsFor } from './roles.js'
 import { saveOperatorSettings } from './settings-store.js'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+const TEMP_PASSWORD_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789'
+
+function temporaryPasswordFor(phone: string): string {
+  for (let attempt = 0; attempt < 30; attempt++) {
+    let password = ''
+    for (let i = 0; i < 16; i++) password += TEMP_PASSWORD_ALPHABET[randomInt(TEMP_PASSWORD_ALPHABET.length)]
+    if (!passwordProblem(password, phone)) return password
+  }
+  throw new ApiError(500, 'internal')
+}
 
 function requireAdmin() {
   return async (req: FastifyRequest) => {
@@ -396,6 +407,56 @@ export function registerAdminRoutes(app: FastifyInstance, cfg: AppConfig) {
       if (message.includes('insufficient_funds')) throw new ApiError(409, 'insufficient_funds')
       throw err
     }
+  })
+
+  app.post('/api/admin/users/:id/reset-password', {
+    preHandler: guardWrite,
+    config: { rateLimit: { max: cfg.passwordResetRateMax, timeWindow: '15 minutes' } },
+  }, async (req) => {
+    const { id } = req.params as { id: string }
+    if (!UUID.test(id)) throw new ApiError(400, 'validation')
+    const existing = await getPool(cfg).query<{ phone: string; closed_at: Date | null }>(
+      `SELECT phone, closed_at FROM users WHERE id = $1`,
+      [id],
+    )
+    const target = existing.rows[0]
+    if (!target) throw new ApiError(404, 'not_found')
+    if (target.closed_at) throw new ApiError(409, 'account_closed')
+    const temporaryPassword = temporaryPasswordFor(target.phone)
+    const passwordHash = await hashPassword(temporaryPassword)
+    await withTx(cfg, async (client) => {
+      const current = await client.query<{ phone: string; closed_at: Date | null }>(
+        `SELECT phone, closed_at FROM users WHERE id = $1 FOR UPDATE`,
+        [id],
+      )
+      const row = current.rows[0]
+      if (!row) throw new ApiError(404, 'not_found')
+      if (row.closed_at) throw new ApiError(409, 'account_closed')
+      await client.query(
+        `UPDATE users
+            SET password_hash = $2,
+                must_change_password = true,
+                failed_login_count = 0,
+                locked_until = NULL,
+                updated_at = now()
+          WHERE id = $1`,
+        [id, passwordHash],
+      )
+      await client.query(
+        `UPDATE sessions SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL`,
+        [id],
+      )
+      await client.query(
+        `INSERT INTO audit_log (actor_user_id, actor, action, payload)
+         VALUES ($1, $2, 'admin.user.reset_password', $3::jsonb)`,
+        [req.auth!.userId, req.auth!.phone, JSON.stringify({ targetUserId: id, targetPhone: row.phone })],
+      )
+      await client.query(
+        `INSERT INTO auth_events (user_id, phone, event, ip) VALUES ($1, $2, 'password_reset', $3)`,
+        [id, row.phone, req.ip?.slice(0, 64) ?? null],
+      )
+    })
+    return { temporaryPassword }
   })
 
   app.post('/api/admin/users/:id/force-logout', { preHandler: guardWrite }, async (req) => {

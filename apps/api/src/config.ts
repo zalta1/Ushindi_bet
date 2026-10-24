@@ -75,6 +75,7 @@ export function loadConfig() {
     superAdminDob: adminDob,
     authRateMax: int('AUTH_RATE_LIMIT_MAX', 10),
     registerRateMax: int('REGISTER_RATE_LIMIT_MAX', 5),
+    passwordResetRateMax: int('PASSWORD_RESET_RATE_LIMIT_MAX', 10),
     migrationsDir: process.env.MIGRATIONS_DIR ?? '',
   }
 }

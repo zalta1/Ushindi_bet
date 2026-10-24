@@ -27,7 +27,15 @@ watch(() => route.path, closeMobile)
 
 const isAdminRoute = computed(() => route.path.startsWith('/admin'))
 const isAviatorRoute = computed(() => route.path.startsWith('/aviator'))
-onMounted(() => { void ms.load(); void slip.loadLimits() })
+function loadPublic() {
+  if (auth.user?.mustChangePassword) return
+  void ms.load()
+  void slip.loadLimits()
+}
+onMounted(loadPublic)
+watch(() => auth.user?.mustChangePassword, (must, prev) => {
+  if (prev && !must) loadPublic()
+})
 function confirmAge() { localStorage.setItem('age18', '1'); age.value = false }
 async function onLogout() { await auth.logout(); router.push('/') }
 async function stopImpersonation() {

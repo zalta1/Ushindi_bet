@@ -2,7 +2,7 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { ApiClientError } from '../api'
+import { ApiClientError, api } from '../api'
 import { normalizeTzPhone, passwordIssue, passwordIssueKey, type PasswordIssue } from '../auth-rules'
 import { useAuth } from '../stores/store'
 
@@ -16,13 +16,24 @@ const confirm = ref('')
 const fieldErrors = reactive({ phone: '', password: '', confirm: '' })
 const lockedMinutes = ref(15)
 const busy = ref(false)
+const supportUrl = ref('')
 
 const mode = computed(() => route.path.includes('register') ? 'register' : route.path.includes('forgot') ? 'forgot' : 'login')
-watch(mode, () => {
+watch(mode, async (value) => {
   fieldErrors.phone = ''
   fieldErrors.password = ''
   fieldErrors.confirm = ''
-})
+  if (value !== 'forgot') {
+    supportUrl.value = ''
+    return
+  }
+  try {
+    const data = await api<{ url: string | null }>('/api/support-contact')
+    supportUrl.value = typeof data.url === 'string' ? data.url : ''
+  } catch {
+    supportUrl.value = ''
+  }
+}, { immediate: true })
 
 function clearErrors() {
   fieldErrors.phone = ''
@@ -84,7 +95,8 @@ async function submit() {
       await router.push('/deposit')
     } else {
       await auth.login({ phone: phone.value, password: password.value })
-      await router.push(safeNext(route.query.next) || '/')
+      if (auth.user?.mustChangePassword) await router.push('/set-password')
+      else await router.push(safeNext(route.query.next) || '/')
     }
   } catch (err) {
     showApiError(err instanceof ApiClientError ? err : new ApiClientError(0, 'request_failed'))
@@ -97,7 +109,11 @@ async function submit() {
 <template>
   <h2>{{ mode === 'register' ? $t('register') : mode === 'forgot' ? $t('forgot') : $t('login') }}</h2>
   <div class="card">
-    <p v-if="mode === 'forgot'">{{ $t('forgotHelp') }}</p>
+    <template v-if="mode === 'forgot'">
+      <p data-testid="forgot-help">{{ $t('forgotHelpSw') }}</p>
+      <p data-testid="forgot-help-en">{{ $t('forgotHelpEn') }}</p>
+      <p v-if="supportUrl"><a :href="supportUrl" data-testid="forgot-support" target="_blank" rel="noopener noreferrer">{{ $t('forgotContact') }}</a></p>
+    </template>
     <form v-else @submit.prevent="submit">
       <label for="auth-phone">{{ $t('phoneLabel') }}</label>
       <input id="auth-phone" v-model="phone" inputmode="tel" autocomplete="tel" placeholder="0712345678" :aria-invalid="!!fieldErrors.phone" data-testid="auth-phone" />

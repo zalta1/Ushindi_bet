@@ -27,6 +27,7 @@ export type AuthContext = {
   readOnly: boolean
   impersonatorUserId: string | null
   impersonationId: string | null
+  mustChangePassword: boolean
 }
 
 declare module 'fastify' {
@@ -115,12 +116,13 @@ type SessionRow = {
   read_only: boolean
   impersonator_user_id: string | null
   impersonation_id: string | null
+  must_change_password: boolean
 }
 
 const sessionSelect = `
   SELECT s.id, s.family_id, s.user_id, s.csrf_hash, s.revoked_at, s.refresh_expires_at,
          s.read_only, s.impersonator_user_id, s.impersonation_id,
-         u.role, u.phone, u.full_name, u.kyc_status,
+         u.role, u.phone, u.full_name, u.kyc_status, u.must_change_password,
          w.balance_tzs, w.bonus_balance_tzs
     FROM sessions s
     JOIN users u ON u.id = s.user_id
@@ -142,6 +144,7 @@ function toAuth(row: SessionRow): AuthContext {
     readOnly: row.read_only,
     impersonatorUserId: row.impersonator_user_id,
     impersonationId: row.impersonation_id,
+    mustChangePassword: row.must_change_password,
   }
 }
 
@@ -158,6 +161,7 @@ export function publicUser(auth: AuthContext) {
     permissions: auth.readOnly ? [] : permissionsFor(auth.role),
     readOnly: auth.readOnly,
     impersonatorUserId: auth.impersonatorUserId,
+    mustChangePassword: auth.mustChangePassword,
   }
 }
 

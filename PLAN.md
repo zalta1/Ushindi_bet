@@ -13,7 +13,7 @@
 ## 2. Sitemap / Routes
 `/` Home (sports rail, tabs, filters, match list, betslip) · `/live` Live · `/match/:id` Match (market tabs: Main/Goals/BTTS/Halftime etc.)
 `/jackpots` · `/virtuals` · `/casino` · `/crash` · `/promotions` · `/search`
-`/login` `/register` `/forgot` (phone + mock 6-digit SMS code shown in UI)
+`/login` `/register` `/forgot` (forgot password tells the player, in Swahili and English, to contact support; there is no SMS code) `/set-password`
 `/profile` `/deposit` `/withdraw` `/transactions` `/my-bets` `/responsible-gambling` `/terms` `/privacy` `/admin` · `/:pathMatch(.*)*` 404
 Layout: desktop 3-col (sports rail | list | betslip), mobile 1-col + bottom tab bar + full-screen betslip overlay.
 
