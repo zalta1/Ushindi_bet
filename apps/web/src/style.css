@@ -148,3 +148,41 @@ button.weka-submit:disabled{opacity:.55;cursor:not-allowed}
 :root.light .weka button.quick.active{color:#0c8f55;border-color:var(--accent)}
 :root.light button.weka-submit{background:var(--accent);color:#042}
 :root.light .prefix-field{border-color:#d5ddd8}
+
+.layout.aviator-route{grid-template-columns:240px minmax(0,1fr)}
+.layout.aviator-route.collapsed{grid-template-columns:0 minmax(0,1fr)}
+.aviator{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:12px;align-items:start}
+.av-history{display:flex;gap:6px;overflow-x:auto;padding-bottom:6px}
+.av-pill{flex:0 0 auto;border-radius:999px;padding:4px 8px;font-size:12px;font-weight:800;color:#fff}
+.av-pill.blue{background:#2563eb}.av-pill.green{background:#16a34a}.av-pill.pink{background:#db2777}.av-pill.purple{background:#7c3aed}
+.av-sky{position:relative;height:320px;border-radius:16px;overflow:hidden;background:radial-gradient(120% 80% at 20% 100%,#1d3a68 0%,#0b1220 55%,#070b12 100%);border:1px solid #1e3a5f}
+.av-sky.crashed{background:radial-gradient(120% 80% at 70% 20%,#5a1830 0%,#140810 60%)}
+.av-plane{position:absolute;width:148px;height:auto;mix-blend-mode:screen;filter:drop-shadow(0 8px 12px #0008);pointer-events:none;transition:left .25s linear,top .25s linear,transform .25s linear}
+.av-readout{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;pointer-events:none}
+.av-readout h1{margin:0;font-size:64px;line-height:1;color:var(--gold);text-shadow:0 6px 24px #000}
+.av-readout h1.crash{color:#ff5a6a;font-size:42px}
+.av-phase,.av-meta,.av-crash{margin:4px 0;color:#d5deea}
+.av-crash{font-size:28px;font-weight:800;color:#fff}
+.av-panels{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.av-panel{background:#10192b;border:1px solid #243f6b;border-radius:12px;padding:12px}
+.av-panel-head{display:flex;justify-content:space-between}
+button.av-bet{width:100%;background:#19c37d;color:#042;font-weight:800;border:0}
+button.av-cash{width:100%;background:var(--gold);color:#10201a;font-weight:800;border:0}
+.av-fair-link{display:inline-block;margin:8px 0;color:var(--gold)}
+.av-side{background:var(--card);border-radius:12px;padding:12px;min-height:240px}
+.av-row,.av-msg{display:flex;gap:8px;align-items:center;margin:8px 0}
+.av-avatar{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:800;color:#fff;flex:0 0 auto}
+.av-chat{max-height:280px;overflow:auto}
+.av-chat-form{display:flex;gap:8px}
+.av-chat-form input{flex:1;margin:0}
+.aviator-fair code{display:block;word-break:break-all;font-size:12px;margin:6px 0 10px}
+@media(max-width:900px){
+  .layout.aviator-route{grid-template-columns:1fr}
+  .aviator{grid-template-columns:1fr}
+  .av-sky{height:230px}
+  .av-readout h1{font-size:48px}
+  .av-plane{width:112px}
+}
+@media(max-width:700px){
+  .av-panels{grid-template-columns:1fr}
+}

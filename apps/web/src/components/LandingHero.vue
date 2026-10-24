@@ -19,7 +19,7 @@ let tracking = false
 const slides = [
   {
     id: 'aviator',
-    to: '/crash',
+    to: '/aviator',
     title: 'heroAviatorTitle',
     body: 'heroAviatorBody',
     cta: 'heroAviatorCta',

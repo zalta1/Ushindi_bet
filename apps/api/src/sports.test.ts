@@ -370,12 +370,13 @@ test('anonymous callers cannot use the old sandbox settle, payment, crash, or uo
   assert.equal(feed.status, 200)
   assert.equal(feed.json.meta.sandbox, true)
   const crash = await player.client.send('POST', '/api/crash/start', {})
-  assert.equal(crash.status, 403)
+  assert.equal(crash.status, 410)
+  assert.equal(crash.json.error, 'gone')
   const admin = await register()
   await pool.query(`UPDATE users SET role = 'admin' WHERE id = $1`, [admin.id])
   const allowed = await admin.client.send('POST', '/api/crash/start', { clientSeed: 'test' })
-  assert.equal(allowed.status, 200)
-  assert.equal(typeof allowed.json.verify.serverSeed, 'string')
+  assert.equal(allowed.status, 410)
+  assert.equal(allowed.json.error, 'gone')
 })
 
 test('correct score, handicaps, draw no bet, and the other full-time markets settle', async () => {

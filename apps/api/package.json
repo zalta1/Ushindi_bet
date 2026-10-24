@@ -6,7 +6,7 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test --test-concurrency=1 src/phone.test.ts src/auth.test.ts src/ledger.test.ts src/deposit.test.ts src/admin.test.ts src/sports.test.ts"
+    "test": "node --import tsx --test --test-concurrency=1 src/phone.test.ts src/auth.test.ts src/ledger.test.ts src/deposit.test.ts src/admin.test.ts src/sports.test.ts src/aviator.test.ts"
   },
   "dependencies": {
     "@fastify/cookie": "^9.4.0",
