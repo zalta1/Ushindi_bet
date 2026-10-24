@@ -6,6 +6,7 @@ import { isAdminRole } from '../admin/roles.js'
 import { assertCsrf, assertOrigin } from '../auth/sessions.js'
 import { getPool, withTx } from '../db.js'
 import { ApiError, money } from '../errors.js'
+import { addCasinoTurnover, budgetView, lockCasinoBudget, lossRate, readCasinoBudget, saveCasinoBudget } from '../casino/budget.js'
 import { operatorConfig } from '../operator-config.js'
 import {
   DICE_CLIENT_SEED,
@@ -13,6 +14,7 @@ import {
   diceMultiplier,
   dicePayout,
   diceWins,
+  generateDiceRoll,
   rollFromHash,
   sha256,
 } from './fairness.js'
@@ -42,6 +44,7 @@ type BetRow = {
   client_seed: string
   nonce: number
   rtp_bps: number
+  forced: boolean
   created_at: Date
 }
 
@@ -100,11 +103,12 @@ function mapBet(row: BetRow) {
     clientSeed: row.client_seed,
     nonce: row.nonce,
     rtpBps: row.rtp_bps,
+    forced: row.forced,
     createdAt: new Date(row.created_at).toISOString(),
   }
 }
 
-function publicLimits() {
+function publicLimits(budgetEnabled: boolean) {
   const settings = diceSettings()
   return {
     enabled: settings.diceEnabled,
@@ -114,12 +118,14 @@ function publicLimits() {
     maxWin: settings.diceMaxWin,
     minTarget: 2,
     maxTarget: 98,
+    budgetEnabled,
   }
 }
 
 export function registerDiceRoutes(app: FastifyInstance, cfg: AppConfig) {
   app.get('/api/dice', async (req) => {
-    const limits = publicLimits()
+    const budget = await readCasinoBudget(getPool(cfg), 'dice')
+    const limits = publicLimits(budget.enabled)
     if (!req.auth) return { limits, commitment: null, history: [] }
     const commitment = await withTx(cfg, async (client) => {
       const locked = await client.query<Commitment>(
@@ -144,7 +150,7 @@ export function registerDiceRoutes(app: FastifyInstance, cfg: AppConfig) {
     })
     const history = await getPool(cfg).query<BetRow>(
       `SELECT id, stake_tzs, target, side, roll, multiplier, payout_tzs, won,
-              server_seed, server_seed_hash, client_seed, nonce, rtp_bps, created_at
+              server_seed, server_seed_hash, client_seed, nonce, rtp_bps, forced, created_at
          FROM dice_bets WHERE user_id = $1 ORDER BY created_at DESC LIMIT 20`,
       [req.auth.userId],
     )
@@ -207,7 +213,7 @@ export function registerDiceRoutes(app: FastifyInstance, cfg: AppConfig) {
       const result = await withTx(cfg, async (client) => {
         const existing = await client.query<BetRow>(
           `SELECT id, stake_tzs, target, side, roll, multiplier, payout_tzs, won,
-                  server_seed, server_seed_hash, client_seed, nonce, rtp_bps, created_at
+                  server_seed, server_seed_hash, client_seed, nonce, rtp_bps, forced, created_at
              FROM dice_bets WHERE client_ref = $1`,
           [key],
         )
@@ -222,6 +228,7 @@ export function registerDiceRoutes(app: FastifyInstance, cfg: AppConfig) {
           return { duplicate: true, bet: existing.rows[0], balance: balance.rows[0]?.balance_tzs ?? '0', next: next.rows[0] }
         }
 
+        const budget = await lockCasinoBudget(client, 'dice')
         const locked = await client.query<Commitment>(
           `SELECT server_seed, server_seed_hash, client_seed, nonce FROM dice_commitments WHERE user_id = $1 FOR UPDATE`,
           [req.auth!.userId],
@@ -232,8 +239,12 @@ export function registerDiceRoutes(app: FastifyInstance, cfg: AppConfig) {
           throw new ApiError(500, 'fairness')
         }
 
-        const hash = diceHash(commitment.server_seed, commitment.client_seed, commitment.nonce)
-        const roll = rollFromHash(hash)
+        // Budget off: the published hash is the roll. Budget on: PesaBetPro generateDiceRoll.
+        // That roll is not a function of the seed, so the bet is marked forced.
+        const roll = budget.enabled
+          ? generateDiceRoll(target, side, lossRate(budget))
+          : rollFromHash(diceHash(commitment.server_seed, commitment.client_seed, commitment.nonce))
+        const forced = budget.enabled
         const won = diceWins(roll, target, side)
         const paid = won ? payout : 0
         const betId = randomUUID()
@@ -254,16 +265,17 @@ export function registerDiceRoutes(app: FastifyInstance, cfg: AppConfig) {
         const inserted = await client.query<BetRow>(
           `INSERT INTO dice_bets (
              id, user_id, stake_tzs, target, side, roll, multiplier, payout_tzs, won,
-             server_seed, server_seed_hash, client_seed, nonce, rtp_bps, client_ref
-           ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+             server_seed, server_seed_hash, client_seed, nonce, rtp_bps, client_ref, forced
+           ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
            RETURNING id, stake_tzs, target, side, roll, multiplier, payout_tzs, won,
-                     server_seed, server_seed_hash, client_seed, nonce, rtp_bps, created_at`,
+                     server_seed, server_seed_hash, client_seed, nonce, rtp_bps, forced, created_at`,
           [
             betId, req.auth!.userId, stake, target, side, roll, multiplier, paid, won,
             commitment.server_seed, commitment.server_seed_hash, commitment.client_seed,
-            commitment.nonce, limits.diceRtpBps, key,
+            commitment.nonce, limits.diceRtpBps, key, forced,
           ],
         )
+        await addCasinoTurnover(client, 'dice', stake, paid)
         const nextSeed = freshSeed()
         const rotated = await client.query<Commitment>(
           `UPDATE dice_commitments
@@ -309,7 +321,7 @@ export function registerDiceRoutes(app: FastifyInstance, cfg: AppConfig) {
     requireAdmin(cfg, req, false)
     const bets = await getPool(cfg).query<BetRow>(
       `SELECT b.id, u.phone, b.stake_tzs, b.target, b.side, b.roll, b.multiplier, b.payout_tzs, b.won,
-              b.server_seed, b.server_seed_hash, b.client_seed, b.nonce, b.rtp_bps, b.created_at
+              b.server_seed, b.server_seed_hash, b.client_seed, b.nonce, b.rtp_bps, b.forced, b.created_at
          FROM dice_bets b
          JOIN users u ON u.id = b.user_id
         ORDER BY b.created_at DESC
@@ -324,11 +336,43 @@ export function registerDiceRoutes(app: FastifyInstance, cfg: AppConfig) {
     const row = pnl.rows[0]
     const stakes = money(row?.stakes ?? 0)
     const payouts = money(row?.payouts ?? 0)
+    const budget = await readCasinoBudget(getPool(cfg), 'dice')
     return {
       settings: diceSettings(),
+      budget: budgetView(budget),
       pnl: { stakes, payouts, profit: stakes - payouts, bets: row?.n ?? 0 },
       bets: bets.rows.map(mapBet),
     }
+  })
+
+  app.patch('/api/admin/dice/budget', async (req) => {
+    requireAdmin(cfg, req, true)
+    const body = (req.body ?? {}) as { budgetTzs?: unknown; enabled?: unknown; resetCounters?: unknown }
+    const next: { budgetTzs?: number; enabled?: boolean; resetCounters?: boolean } = {}
+    if (body.budgetTzs !== undefined) {
+      if (typeof body.budgetTzs !== 'number' || !Number.isInteger(body.budgetTzs) || body.budgetTzs < 0 || body.budgetTzs > 1_000_000_000_000) {
+        throw new ApiError(400, 'validation', { fields: { budgetTzs: 'invalid' } })
+      }
+      next.budgetTzs = body.budgetTzs
+    }
+    if (body.enabled !== undefined) {
+      if (typeof body.enabled !== 'boolean') throw new ApiError(400, 'validation', { fields: { enabled: 'invalid' } })
+      next.enabled = body.enabled
+    }
+    if (body.resetCounters !== undefined) {
+      if (body.resetCounters !== true) throw new ApiError(400, 'validation', { fields: { resetCounters: 'invalid' } })
+      next.resetCounters = true
+    }
+    if (next.budgetTzs === undefined && next.enabled === undefined && !next.resetCounters) {
+      throw new ApiError(400, 'validation', { fields: { budget: 'empty' } })
+    }
+    const saved = await withTx(cfg, async (client) => {
+      const before = await lockCasinoBudget(client, 'dice')
+      const after = await saveCasinoBudget(client, 'dice', next)
+      return { before: budgetView(before), after: budgetView(after) }
+    })
+    await audit(cfg, req, 'admin.dice.budget', saved)
+    return saved.after
   })
 
   app.patch('/api/admin/dice/settings', async (req) => {

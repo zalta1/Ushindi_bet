@@ -5,7 +5,7 @@ import { useRouter } from 'vue-router'
 import { ApiClientError, api } from '../api'
 import { useAuth } from '../stores/store'
 
-type Limits = { enabled: boolean; rtpBps: number; minStake: number; maxStake: number; maxWin: number; minTarget: number; maxTarget: number }
+type Limits = { enabled: boolean; rtpBps: number; minStake: number; maxStake: number; maxWin: number; minTarget: number; maxTarget: number; budgetEnabled: boolean }
 type Commitment = { serverSeedHash: string; clientSeed: string; nonce: number }
 type Bet = {
   id: string
@@ -20,6 +20,7 @@ type Bet = {
   serverSeedHash: string
   clientSeed: string
   nonce: number
+  forced: boolean
   createdAt: string
 }
 
@@ -106,8 +107,8 @@ onMounted(async () => {
 <template>
   <div data-testid="dice-page" class="dice">
     <h2>{{ $t('dice.title') }}</h2>
-    <p class="muted">{{ $t('dice.fair') }}</p>
-    <p v-if="commitment" class="dice-hash" data-testid="dice-hash">{{ $t('dice.hash') }} <code>{{ commitment.serverSeedHash }}</code> · nonce {{ commitment.nonce }}</p>
+    <p class="muted" data-testid="dice-fairness">{{ limits?.budgetEnabled ? $t('dice.house') : $t('dice.fair') }}</p>
+    <p v-if="commitment && !limits?.budgetEnabled" class="dice-hash" data-testid="dice-hash">{{ $t('dice.hash') }} <code>{{ commitment.serverSeedHash }}</code> · nonce {{ commitment.nonce }}</p>
     <p v-if="!limits?.enabled" class="form-error">{{ $t('dice.err_game_disabled') }}</p>
     <p v-if="error" class="form-error" data-testid="dice-error">{{ errorText() }}</p>
 
@@ -130,14 +131,15 @@ onMounted(async () => {
       <button type="button" class="deposit-btn" data-testid="dice-play" :disabled="playing || !limits?.enabled" @click="play">
         {{ playing ? $t('dice.rolling') : auth.user ? $t('dice.play') : $t('dice.login') }}
       </button>
-      <p v-if="last" class="muted dice-reveal" data-testid="dice-reveal">{{ $t('dice.seed') }} <code>{{ last.serverSeed }}</code></p>
+      <p v-if="last && !last.forced" class="muted dice-reveal" data-testid="dice-reveal">{{ $t('dice.seed') }} <code>{{ last.serverSeed }}</code></p>
+      <p v-else-if="last?.forced" class="muted dice-reveal" data-testid="dice-house-result">{{ $t('dice.houseResult') }}</p>
     </section>
 
     <section data-testid="dice-history">
       <h3>{{ $t('dice.history') }}</h3>
       <p v-if="!history.length" class="muted">{{ $t('dice.noHistory') }}</p>
       <p v-for="bet in history" :key="bet.id" data-testid="dice-history-row">
-        {{ bet.roll }} · {{ bet.side === 'under' ? $t('dice.under') : $t('dice.over') }} {{ bet.target }} · {{ bet.multiplier.toFixed(2) }}x · {{ money(bet.stakeTzs) }} → {{ money(bet.payoutTzs) }} · {{ bet.won ? $t('dice.win') : $t('dice.loss') }}
+        {{ bet.roll }} · {{ bet.side === 'under' ? $t('dice.under') : $t('dice.over') }} {{ bet.target }} · {{ bet.multiplier.toFixed(2) }}x · {{ money(bet.stakeTzs) }} → {{ money(bet.payoutTzs) }} · {{ bet.won ? $t('dice.win') : $t('dice.loss') }}<template v-if="bet.forced"> · {{ $t('dice.houseTag') }}</template>
       </p>
     </section>
   </div>

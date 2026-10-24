@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto'
+import { createHash, randomBytes } from 'node:crypto'
 
 export const DICE_CLIENT_SEED = 'ushindi'
 
@@ -36,4 +36,34 @@ export function diceWins(roll: number, target: number, side: 'under' | 'over'): 
 export function dicePayout(stake: number, multiplier: number, maxWin: number): number {
   const raw = Math.floor((stake * Math.round(multiplier * 100)) / 100)
   return Math.max(0, Math.min(raw, maxWin))
+}
+
+/** PesaBetPro `rnd`: a uint32 divided by 2^32. */
+export function cryptoUnit(): number {
+  return randomBytes(4).readUInt32BE(0) / 4294967296
+}
+
+let unit: () => number = cryptoUnit
+
+/** Tests pin the forced-loss branch. Production keeps the crypto unit interval. */
+export function setDiceUnitForTests(next: (() => number) | null) {
+  unit = next ?? cryptoUnit
+}
+
+/**
+ * PesaBetPro `generateDiceRoll`. When `rnd()` is under the loss rate the roll is
+ * forced into the losing range. Otherwise it is uniform on 1..100, and still
+ * not a function of the committed seed.
+ */
+export function generateDiceRoll(
+  target: number,
+  side: 'under' | 'over',
+  rate: number,
+  rnd: () => number = unit,
+): number {
+  if (rnd() < rate) {
+    if (side === 'under') return Math.min(100, target + Math.floor(rnd() * (100 - target)) + 1)
+    return Math.max(1, Math.floor(rnd() * target) + 1)
+  }
+  return Math.floor(rnd() * 100) + 1
 }

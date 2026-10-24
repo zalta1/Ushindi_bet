@@ -219,6 +219,7 @@ button.av-cash{width:100%;background:var(--gold);color:#10201a;font-weight:800;b
 .dice-roll.loss{color:#ff5a5a}
 .dice-hash,.dice-reveal{word-break:break-all;font-size:12px}
 .dice-board input[type=range]{width:100%}
+.dice-budget{margin-top:16px}
 .jackpot-form input[type=checkbox]{width:auto}
 .layout.dice-route{grid-template-columns:240px minmax(0,1fr)}
 .layout.dice-route.collapsed{grid-template-columns:0 minmax(0,1fr)}
