@@ -40,6 +40,7 @@ const query = ref('')
 const selected = ref<UserDetail | null>(null)
 const amountTzs = ref(1000)
 const reason = ref('')
+const temporaryPassword = ref('')
 const admins = ref<UserRow[]>([])
 const adminPhone = ref('')
 const auditRows = ref<AuditRow[]>([])
@@ -145,6 +146,7 @@ async function loadUsers() {
 }
 
 async function openUser(id: string) {
+  temporaryPassword.value = ''
   selected.value = await api<UserDetail>(`/api/admin/users/${id}`)
   error.value = ''
 }
@@ -392,6 +394,18 @@ async function adjust(direction: 'credit' | 'debit') {
     reason.value = ''
     await openUser(selected.value.user.id)
     await loadUsers()
+  } catch (err) {
+    fail(err)
+  }
+}
+
+async function resetPassword(id: string) {
+  error.value = ''
+  temporaryPassword.value = ''
+  try {
+    const data = await api<{ temporaryPassword: string }>(`/api/admin/users/${id}/reset-password`, { method: 'POST', json: {} })
+    temporaryPassword.value = data.temporaryPassword
+    status.value = 'reset'
   } catch (err) {
     fail(err)
   }
@@ -645,6 +659,9 @@ async function deleteNote(id: string) {
         <label>{{ $t('adminReason') }}<input v-model="reason" data-testid="admin-reason" /></label>
         <button type="button" @click="adjust('credit')" data-testid="admin-credit">{{ $t('adminCredit') }}</button>
         <button type="button" @click="adjust('debit')" data-testid="admin-debit">{{ $t('adminDebit') }}</button>
+        <button type="button" @click="resetPassword(selected.user.id)" data-testid="admin-reset-password">{{ $t('adminResetPassword') }}</button>
+        <p v-if="temporaryPassword" class="field-hint">{{ $t('adminTempPasswordOnce') }}</p>
+        <p v-if="temporaryPassword"><code data-testid="admin-temp-password">{{ temporaryPassword }}</code></p>
         <button type="button" @click="forceLogout(selected.user.id)" data-testid="admin-force-logout">{{ $t('adminForceLogout') }}</button>
         <button type="button" @click="impersonate(selected.user.id)" data-testid="admin-impersonate">{{ $t('adminImpersonate') }}</button>
         <h4>{{ $t('adminLedger') }}</h4>

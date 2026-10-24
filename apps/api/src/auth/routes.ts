@@ -299,7 +299,7 @@ export function registerAuthRoutes(app: FastifyInstance, cfg: AppConfig) {
       if (problem) throw fieldError({ newPassword: problem })
       const passwordHash = await hashPassword(body.newPassword)
       await getPool(cfg).query(
-        `UPDATE users SET password_hash = $2, failed_login_count = 0, locked_until = NULL, updated_at = now() WHERE id = $1`,
+        `UPDATE users SET password_hash = $2, must_change_password = false, failed_login_count = 0, locked_until = NULL, updated_at = now() WHERE id = $1`,
         [user.id, passwordHash],
       )
       await revokeAllSessions(cfg, user.id)
@@ -311,6 +311,58 @@ export function registerAuthRoutes(app: FastifyInstance, cfg: AppConfig) {
           [user.id, user.phone],
         )
       }
+      const auth = await issueSession(cfg, reply, user.id, req)
+      return { user: publicUser(auth) }
+    },
+  )
+
+  app.post(
+    '/api/auth/set-password',
+    {
+      config: { rateLimit: { max: cfg.authRateMax, timeWindow: '15 minutes' } },
+      schema: {
+        body: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['newPassword'],
+          properties: {
+            newPassword: { type: 'string', maxLength: 200 },
+          },
+        },
+      },
+    },
+    async (req, reply) => {
+      await mutation(req)
+      if (!req.auth) throw new ApiError(401, 'unauthenticated')
+      assertCsrf(req, req.auth.csrfHash)
+      if (req.auth.readOnly) throw new ApiError(403, 'read_only')
+      const body = req.body as { newPassword: string }
+      const { rows } = await getPool(cfg).query<UserRow & { must_change_password: boolean }>(
+        `SELECT id, phone, password_hash, role, failed_login_count, locked_until, must_change_password
+           FROM users WHERE id = $1 AND closed_at IS NULL`,
+        [req.auth.userId],
+      )
+      const user = rows[0]
+      if (!user) throw new ApiError(401, 'unauthenticated')
+      if (!user.must_change_password) throw new ApiError(409, 'password_change_not_required')
+      const problem = passwordProblem(body.newPassword, user.phone)
+      if (problem) throw fieldError({ newPassword: problem })
+      if (await verifyPassword(user.password_hash, body.newPassword)) {
+        throw fieldError({ newPassword: 'same_password' })
+      }
+      const passwordHash = await hashPassword(body.newPassword)
+      await getPool(cfg).query(
+        `UPDATE users
+            SET password_hash = $2,
+                must_change_password = false,
+                failed_login_count = 0,
+                locked_until = NULL,
+                updated_at = now()
+          WHERE id = $1`,
+        [user.id, passwordHash],
+      )
+      await revokeAllSessions(cfg, user.id)
+      await recordAuth(cfg, 'password_change', clientIp(req), user.id, user.phone)
       const auth = await issueSession(cfg, reply, user.id, req)
       return { user: publicUser(auth) }
     },
