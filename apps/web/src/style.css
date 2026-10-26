@@ -221,8 +221,8 @@ button.av-cash{width:100%;background:var(--gold);color:#10201a;font-weight:800;b
 .dice-board input[type=range]{width:100%}
 .dice-budget{margin-top:16px}
 .jackpot-form input[type=checkbox]{width:auto}
-.layout.dice-route,.layout.mines-route,.layout.mayan-route{grid-template-columns:240px minmax(0,1fr)}
-.layout.dice-route.collapsed,.layout.mines-route.collapsed,.layout.mayan-route.collapsed{grid-template-columns:0 minmax(0,1fr)}
+.layout.dice-route,.layout.mines-route,.layout.mayan-route,.layout.penalty-route{grid-template-columns:240px minmax(0,1fr)}
+.layout.dice-route.collapsed,.layout.mines-route.collapsed,.layout.mayan-route.collapsed,.layout.penalty-route.collapsed{grid-template-columns:0 minmax(0,1fr)}
 .mines{max-width:720px}
 .mines-board{text-align:center}
 .mines-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;max-width:420px;margin:12px auto}
@@ -257,8 +257,21 @@ button.av-cash{width:100%;background:var(--gold);color:#10201a;font-weight:800;b
 .mayan-board select{width:auto;background:#78350f;color:#f6e7b2;border:1px solid rgba(217,119,6,.45);border-radius:8px;padding:8px}
 .mayan-board .win{color:#facc15;font-weight:900}
 .mayan-board .loss{color:#ff8a8a;font-weight:800}
+.penalty-admin{display:flex;flex-direction:column;gap:12px}
+.penalty-admin-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.penalty-admin-head h2{margin:0;font-size:18px}
+.penalty-admin-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.penalty-admin-stats .card{margin:0}
+.penalty-admin-stats small{color:var(--muted)}
+.penalty-admin-stats b{display:block;font-size:18px}
+.penalty-admin-stats .up{color:#15803d}
+.penalty-admin-stats .down{color:#dc2626}
+.penalty-zone-row{display:grid;grid-template-columns:minmax(0,4fr) minmax(0,3fr) minmax(0,3fr) auto;gap:8px;align-items:center;margin-bottom:8px}
+.penalty-zone-row input{margin:0}
+.penalty-zone-row small{color:var(--muted);font-size:10px}
+@media(max-width:700px){.penalty-admin-stats{grid-template-columns:1fr 1fr}.penalty-zone-row{grid-template-columns:1fr 1fr}}
 @media(max-width:900px){
-  .layout.dice-route,.layout.dice-route.collapsed,.layout.mines-route,.layout.mines-route.collapsed,.layout.mayan-route,.layout.mayan-route.collapsed{grid-template-columns:1fr}
+  .layout.dice-route,.layout.dice-route.collapsed,.layout.mines-route,.layout.mines-route.collapsed,.layout.mayan-route,.layout.mayan-route.collapsed,.layout.penalty-route,.layout.penalty-route.collapsed{grid-template-columns:1fr}
   .dice-roll{font-size:64px}
   .mines-cell{min-height:44px;font-size:18px}
   .mayan-target{min-height:64px;padding:6px 2px}
