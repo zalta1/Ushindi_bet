@@ -583,7 +583,8 @@ onBeforeUnmount(() => {
 .pb-ball{display:block;font-size:18px;line-height:1}
 .pb-spin{width:18px;height:18px;border:2px solid #04240f;border-top-color:transparent;border-radius:50%;display:inline-block;animation:pb-spin .7s linear infinite}
 .pb-chips{margin-top:6px;display:flex;align-items:center;justify-content:space-between;gap:8px}
-.pb-chips button{padding:4px 10px;border-radius:999px;border:1px solid #ffffff26;background:#ffffff0d;color:#fffc;font-size:10px;font-weight:700;margin-right:6px}
+.pb-chips > div{display:flex;gap:6px;flex-wrap:wrap}
+.pb-chips button{padding:4px 10px;border-radius:999px;border:1px solid #ffffff26;background:#ffffff0d;color:#fffc;font-size:10px;font-weight:700}
 .pb-chips button.on{background:#b8ff00;color:#04240f;border-color:#b8ff00}
 .pb-win{font-size:10px;color:#fff9;white-space:nowrap}
 .pb-win b{color:#b8ff00}
