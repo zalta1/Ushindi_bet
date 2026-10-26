@@ -76,6 +76,13 @@ beforeEach(async () => {
        SET phase = 'idle', round_id = NULL, phase_started_at = '2000-01-01', updated_at = clock_timestamp()`,
   )
   await pool.query(`SELECT setval('aviator_round_no_seq', 1, false)`)
+  await pool.query(
+    `INSERT INTO aviator_budget (id, budget_tzs, total_bets_tzs, total_payouts_tzs, enabled)
+     VALUES (TRUE, 25000, 0, 0, FALSE)
+     ON CONFLICT (id) DO UPDATE
+       SET budget_tzs = 25000, total_bets_tzs = 0, total_payouts_tzs = 0, enabled = FALSE`,
+  )
+  await pool.query(`DELETE FROM aviator_suspensions`)
 })
 
 after(async () => {
@@ -440,6 +447,335 @@ test('stake limits, chat moderation, and aviator settings are enforced and audit
   assert.equal(overview.status, 200, JSON.stringify(overview.json))
   assert.equal(overview.json.settings.aviatorRtpBps, 9500)
   assert.equal(typeof overview.json.pnl.allProfit, 'number')
+})
+
+async function roundRow(roundId: string) {
+  const { rows } = await pool.query<{
+    crash_point: string
+    crash_hash: string
+    server_seed: string
+    server_seed_hash: string
+    nonce: string
+    rtp_bps: number
+    max_multiplier: string
+    max_win_tzs: string
+    min_stake_tzs: string
+    max_stake_tzs: string
+    betting_ms: number
+    crashed_ms: number
+    budget_enabled: boolean
+    betting_ends_at: Date
+  }>(
+    `SELECT crash_point, crash_hash, server_seed, server_seed_hash, nonce, rtp_bps, max_multiplier,
+            max_win_tzs, min_stake_tzs, max_stake_tzs, betting_ms, crashed_ms, budget_enabled, betting_ends_at
+       FROM aviator_rounds WHERE id = $1`,
+    [roundId],
+  )
+  return rows[0]
+}
+
+async function finishAndOpenNext(roundId: string) {
+  await pool.query(
+    `UPDATE aviator_rounds
+        SET crash_point = 1, betting_ends_at = clock_timestamp() - interval '1 second'
+      WHERE id = $1`,
+    [roundId],
+  )
+  const crashed = await tickAviator(cfg)
+  assert.equal(crashed.skipped, false)
+  if (!crashed.skipped) assert.equal(crashed.action, 'crashed')
+  await pool.query(`UPDATE aviator_rounds SET crashed_ms = 1000 WHERE id = $1`, [roundId])
+  await pool.query(`UPDATE aviator_state SET phase_started_at = clock_timestamp() - interval '30 seconds' WHERE id = 1`)
+  const next = await tickAviator(cfg)
+  assert.equal(next.skipped, false)
+  if (next.skipped) throw new Error('locked')
+  assert.equal(next.action, 'betting')
+  return next.roundId as string
+}
+
+test('saved limits, the wait, and the budget switch apply on the next round only', async () => {
+  const { admin, player } = await adminAndPlayer()
+  const roundId = await openBetting()
+  const before = await roundRow(roundId)
+  const placed = await player.client.send('POST', '/api/aviator/bets', {
+    stakeTzs: 200,
+    panel: 1,
+    autoCashout: 1.5,
+    idempotencyKey: nextKey(),
+  })
+  assert.equal(placed.status, 200, JSON.stringify(placed.json))
+  const saved = await admin.client.send('PATCH', '/api/admin/aviator/settings', {
+    aviatorRtpBps: 9000,
+    aviatorMaxMultiplier: 200,
+    aviatorMinStake: 500,
+    aviatorMaxStake: 5000,
+    aviatorMaxWin: 50_000,
+    aviatorBettingMs: 8000,
+    aviatorCrashedMs: 4000,
+  })
+  assert.equal(saved.status, 200, JSON.stringify(saved.json))
+  const same = await roundRow(roundId)
+  assert.equal(same.crash_point, before.crash_point)
+  assert.equal(same.rtp_bps, before.rtp_bps)
+  assert.equal(same.max_multiplier, before.max_multiplier)
+  assert.equal(same.min_stake_tzs, before.min_stake_tzs)
+  assert.equal(same.max_win_tzs, before.max_win_tzs)
+  assert.equal(same.betting_ms, before.betting_ms)
+  assert.equal(new Date(same.betting_ends_at).toISOString(), new Date(before.betting_ends_at).toISOString())
+  assert.equal(same.budget_enabled, false)
+  const stillOpen = await player.client.send('POST', '/api/aviator/bets', {
+    stakeTzs: 150,
+    panel: 2,
+    idempotencyKey: nextKey(),
+  })
+  assert.equal(stillOpen.status, 200, JSON.stringify(stillOpen.json))
+
+  const budget = await admin.client.send('PATCH', '/api/admin/aviator/budget', { enabled: true })
+  assert.equal(budget.status, 200, JSON.stringify(budget.json))
+  assert.equal(budget.json.enabled, true)
+  assert.equal(budget.json.applies, 'next_round')
+  const afterBudget = await roundRow(roundId)
+  assert.equal(afterBudget.crash_point, before.crash_point)
+  assert.equal(afterBudget.budget_enabled, false)
+  const expectedNow = crashPointFromHash(before.crash_hash, before.rtp_bps / 100, Number(before.max_multiplier))
+  assert.equal(Number(afterBudget.crash_point).toFixed(2), expectedNow.toFixed(2))
+
+  const rigged = await admin.client.send('PATCH', '/api/admin/aviator/settings', { crashPoint: 1.01 })
+  assert.equal(rigged.status, 400)
+  assert.equal(rigged.json.fields.crashPoint, 'forbidden')
+  const winners = await admin.client.send('PATCH', '/api/admin/aviator/budget', { winners: [player.id] })
+  assert.equal(winners.status, 400)
+  assert.equal((await roundRow(roundId)).crash_point, before.crash_point)
+
+  const hidden = await admin.client.send('GET', `/api/admin/aviator/activity?q=${encodeURIComponent(player.number)}&kind=bet`)
+  assert.equal(hidden.status, 200, JSON.stringify(hidden.json))
+  assert.ok(hidden.json.rows.length >= 1)
+  assert.equal(hidden.json.rows.some((row: { serverSeed: string | null }) => row.serverSeed), false)
+  const roundLog = await admin.client.send('GET', '/api/admin/aviator/activity?kind=round')
+  const openRow = roundLog.json.rows.find((row: { roundNo: number }) => row.roundNo === Number(before.nonce))
+  assert.ok(openRow)
+  assert.equal(openRow.serverSeed, null)
+  assert.equal(openRow.crashPoint, null)
+  assert.equal(openRow.serverSeedHash, before.server_seed_hash)
+
+  const overview = await admin.client.send('GET', '/api/admin/aviator')
+  assert.equal(overview.status, 200, JSON.stringify(overview.json))
+  const mine = overview.json.live.players.find((row: { userId: string, panel: number }) => row.userId === player.id && row.panel === 1)
+  assert.ok(mine)
+  assert.equal(mine.stakeTzs, 200)
+  assert.equal(mine.autoCashout, 1.5)
+  assert.equal(mine.status, 'active')
+  assert.equal(overview.json.live.round.serverSeed, null)
+  assert.equal(overview.json.live.roundLimits.budgetEnabled, false)
+  assert.equal(overview.json.live.roundLimits.minStakeTzs, 100)
+  assert.equal(overview.json.budget.enabled, true)
+
+  const nextId = await finishAndOpenNext(roundId)
+  const next = await roundRow(nextId)
+  assert.equal(next.rtp_bps, 9000)
+  assert.equal(Number(next.max_multiplier), 200)
+  assert.equal(Number(next.min_stake_tzs), 500)
+  assert.equal(Number(next.max_stake_tzs), 5000)
+  assert.equal(Number(next.max_win_tzs), 50_000)
+  assert.equal(next.betting_ms, 8000)
+  assert.equal(next.crashed_ms, 4000)
+  assert.equal(next.budget_enabled, true)
+  const fair = crashPointFromHash(next.crash_hash, 90, 200)
+  assert.equal(Number(next.crash_point).toFixed(2), fair.toFixed(2))
+  const low = await player.client.send('POST', '/api/aviator/bets', {
+    stakeTzs: 200,
+    panel: 1,
+    idempotencyKey: nextKey(),
+  })
+  assert.equal(low.status, 400)
+  const ok = await player.client.send('POST', '/api/aviator/bets', {
+    stakeTzs: 500,
+    panel: 1,
+    idempotencyKey: nextKey(),
+  })
+  assert.equal(ok.status, 200, JSON.stringify(ok.json))
+
+  const revealed = await admin.client.send('GET', '/api/admin/aviator/activity?kind=round&limit=20')
+  const closed = revealed.json.rows.find((row: { roundNo: number, serverSeed: string | null }) => row.roundNo === Number(before.nonce))
+  assert.ok(closed.serverSeed)
+  assert.equal(closed.crashPoint, 1)
+  const changes = await admin.client.send('GET', '/api/admin/aviator/activity?q=admin.aviator.settings&kind=admin')
+  assert.ok(changes.json.rows.length >= 1)
+  const csv = await app.inject({
+    method: 'GET',
+    url: `/api/admin/aviator/activity?format=csv&q=${encodeURIComponent(player.number)}`,
+    headers: { cookie: admin.client.header() },
+  })
+  assert.equal(csv.statusCode, 200)
+  assert.match(String(csv.headers['content-type']), /text\/csv/)
+  assert.match(csv.body, /bet/)
+  assert.match(csv.body, new RegExp(`0${player.number.slice(4)}`))
+
+  const detail = await admin.client.send('GET', `/api/admin/aviator/players/${player.id}`)
+  assert.equal(detail.status, 200, JSON.stringify(detail.json))
+  assert.equal(detail.json.stakesTzs, 850)
+  assert.equal(detail.json.payoutsTzs, 0)
+  assert.equal(detail.json.netPnlTzs, -850)
+  assert.equal(detail.json.lost, 2)
+  assert.ok(Array.isArray(detail.json.flags))
+  assert.equal(detail.json.history.length, 3)
+})
+
+test('the crash pause keeps the wait stored on the round', async () => {
+  const roundId = await openBetting()
+  await pool.query(
+    `UPDATE aviator_rounds SET crash_point = 1, betting_ends_at = clock_timestamp() - interval '1 second' WHERE id = $1`,
+    [roundId],
+  )
+  const crashed = await tickAviator(cfg)
+  assert.equal(crashed.skipped, false)
+  if (!crashed.skipped) assert.equal(crashed.action, 'crashed')
+  operatorConfig.aviatorCrashedMs = 1000
+  const stay = await tickAviator(cfg)
+  assert.equal(stay.skipped, false)
+  if (!stay.skipped) assert.equal(stay.action, 'crashed')
+  const row = await roundRow(roundId)
+  assert.equal(row.crashed_ms, 5000)
+})
+
+test('suspending a player blocks a new Aviator bet and still pays an open cashout', async () => {
+  const { admin, player } = await adminAndPlayer()
+  const roundId = await openBetting()
+  const before = await balanceOf(player.client)
+  const blocked = await admin.client.send('POST', `/api/admin/aviator/players/${player.id}/suspend`, { reason: 'review' })
+  assert.equal(blocked.status, 200, JSON.stringify(blocked.json))
+  const denied = await player.client.send('POST', '/api/aviator/bets', {
+    stakeTzs: 1000,
+    panel: 1,
+    idempotencyKey: nextKey(),
+  })
+  assert.equal(denied.status, 403)
+  assert.equal(denied.json.error, 'aviator_suspended')
+  assert.equal(await balanceOf(player.client), before)
+  const audit = await pool.query<{ n: number }>(
+    `SELECT count(*)::int AS n FROM audit_log WHERE action = 'admin.aviator.suspend'`,
+  )
+  assert.equal(audit.rows[0].n, 1)
+
+  const opened = await admin.client.send('POST', `/api/admin/aviator/players/${player.id}/unsuspend`, {})
+  assert.equal(opened.status, 200, JSON.stringify(opened.json))
+  const key = nextKey()
+  const placed = await player.client.send('POST', '/api/aviator/bets', {
+    stakeTzs: 1000,
+    panel: 1,
+    idempotencyKey: key,
+  })
+  assert.equal(placed.status, 200, JSON.stringify(placed.json))
+  const replay = await player.client.send('POST', '/api/aviator/bets', {
+    stakeTzs: 1000,
+    panel: 1,
+    idempotencyKey: key,
+  })
+  assert.equal(replay.status, 200, JSON.stringify(replay.json))
+  assert.equal(replay.json.idempotent, true)
+  const bets = await pool.query<{ total_bets_tzs: string }>(`SELECT total_bets_tzs FROM aviator_budget WHERE id`)
+  assert.equal(Number(bets.rows[0].total_bets_tzs), 1000)
+
+  await admin.client.send('POST', `/api/admin/aviator/players/${player.id}/suspend`, { reason: 'again' })
+  await forceFlying(roundId, 20, 4)
+  const cashed = await player.client.send('POST', '/api/aviator/cashout', { betId: placed.json.betId })
+  assert.equal(cashed.status, 200, JSON.stringify(cashed.json))
+  const again = await player.client.send('POST', '/api/aviator/cashout', { betId: placed.json.betId })
+  assert.equal(again.status, 200)
+  assert.equal(again.json.idempotent, true)
+  const budget = await pool.query<{ total_bets_tzs: string, total_payouts_tzs: string }>(
+    `SELECT total_bets_tzs, total_payouts_tzs FROM aviator_budget WHERE id`,
+  )
+  assert.equal(Number(budget.rows[0].total_bets_tzs), 1000)
+  assert.equal(Number(budget.rows[0].total_payouts_tzs), cashed.json.payoutTzs)
+  const wins = await pool.query<{ n: number }>(
+    `SELECT count(*)::int AS n FROM ledger_entries WHERE user_id = $1 AND entry_type = 'bet_win'`,
+    [player.id],
+  )
+  assert.equal(wins.rows[0].n, 1)
+  const detail = await admin.client.send('GET', `/api/admin/aviator/players/${player.id}`)
+  assert.equal(detail.json.suspended, true)
+  assert.equal(detail.json.netPnlTzs, cashed.json.payoutTzs - 1000)
+  assert.ok(detail.json.flags.some((flag: { code: string }) => flag.code === 'suspended'))
+  const looked = await admin.client.send('GET', `/api/admin/aviator/players?phone=${encodeURIComponent(player.number)}`)
+  assert.equal(looked.status, 200)
+  assert.equal(looked.json.userId, player.id)
+
+  const stranger = await player.client.send('GET', '/api/admin/aviator')
+  assert.equal(stranger.status, 403)
+  const log = await player.client.send('GET', '/api/admin/aviator/activity')
+  assert.equal(log.status, 403)
+  const stream = await player.client.send('GET', '/api/admin/aviator/stream')
+  assert.equal(stream.status, 403)
+  const csrf = await app.inject({
+    method: 'POST',
+    url: `/api/admin/aviator/players/${player.id}/unsuspend`,
+    headers: { cookie: admin.client.header() },
+    payload: {},
+  })
+  assert.equal(csrf.statusCode, 403)
+})
+
+test('aborting a round removes its stake from the Aviator budget', async () => {
+  const { player } = await adminAndPlayer()
+  await openBetting()
+  const placed = await player.client.send('POST', '/api/aviator/bets', {
+    stakeTzs: 1000,
+    panel: 1,
+    idempotencyKey: nextKey(),
+  })
+  assert.equal(placed.status, 200, JSON.stringify(placed.json))
+  operatorConfig.aviatorEnabled = false
+  const aborted = await tickAviator(cfg)
+  assert.equal(aborted.skipped, false)
+  if (!aborted.skipped) assert.equal(aborted.action, 'aborted')
+  const budget = await pool.query<{ total_bets_tzs: string, total_payouts_tzs: string }>(
+    `SELECT total_bets_tzs, total_payouts_tzs FROM aviator_budget WHERE id`,
+  )
+  assert.equal(Number(budget.rows[0].total_bets_tzs), 0)
+  assert.equal(Number(budget.rows[0].total_payouts_tzs), 0)
+})
+
+test('player history flags a cash-out cluster, a high cash-out rate, and a stake spike', async () => {
+  const { admin, player } = await adminAndPlayer()
+  const other = await register()
+  async function seed(userId: string, stake: number, status: 'cashed_out' | 'lost', crash: number, mult: number | null) {
+    const round = await pool.query<{ id: string }>(
+      `INSERT INTO aviator_rounds (
+         round_no, status, server_seed, server_seed_hash, client_seed, nonce, crash_hash,
+         crash_point, rtp_bps, max_multiplier, max_win_tzs, betting_ms, betting_ends_at, crashed_at,
+         min_stake_tzs, max_stake_tzs, crashed_ms, budget_enabled
+       ) VALUES (
+         nextval('aviator_round_no_seq'), 'crashed', $1, $2, 'ushindi', 1, $2,
+         $3, 9600, 1000, 10000000, 5000, now(), now(),
+         100, 2000000, 5000, false
+       ) RETURNING id`,
+      ['ab'.repeat(32), 'cd'.repeat(32), crash],
+    )
+    const payout = status === 'cashed_out' ? Math.floor(stake * (mult ?? 1)) : 0
+    await pool.query(
+      `INSERT INTO aviator_bets (
+         user_id, round_id, panel, stake_tzs, status, cashout_multiplier, payout_tzs, idempotency_key, settled_at
+       ) VALUES ($1, $2, 1, $3, $4, $5, $6, $7, now())`,
+      [userId, round.rows[0].id, stake, status, mult, payout, nextKey()],
+    )
+  }
+  for (let i = 0; i < 20; i += 1) await seed(player.id, 100, 'cashed_out', 2, 1.9)
+  for (let i = 0; i < 10; i += 1) await seed(other.id, 100, 'lost', 1.2, null)
+  await seed(other.id, 10_000, 'lost', 1.2, null)
+
+  const hot = await admin.client.send('GET', `/api/admin/aviator/players/${player.id}`)
+  assert.equal(hot.status, 200, JSON.stringify(hot.json))
+  const hotCodes = hot.json.flags.map((flag: { code: string }) => flag.code)
+  assert.ok(hotCodes.includes('high_cashout_rate'))
+  assert.ok(hotCodes.includes('cashout_near_crash'))
+  assert.equal(hotCodes.includes('stake_spike'), false)
+  assert.equal(hot.json.netPnlTzs, 20 * Math.floor(100 * 1.9) - 20 * 100)
+
+  const spike = await admin.client.send('GET', `/api/admin/aviator/players/${other.id}`)
+  const spikeCodes = spike.json.flags.map((flag: { code: string }) => flag.code)
+  assert.ok(spikeCodes.includes('stake_spike'))
+  assert.equal(spikeCodes.includes('high_cashout_rate'), false)
 })
 
 function sha256(value: string) {

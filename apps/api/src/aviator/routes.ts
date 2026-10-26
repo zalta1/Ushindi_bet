@@ -3,9 +3,11 @@ import type { AppConfig } from '../config.js'
 import { assertCsrf, assertOrigin } from '../auth/sessions.js'
 import { saveOperatorSettings } from '../admin/settings-store.js'
 import { isAdminRole } from '../admin/roles.js'
-import { getPool } from '../db.js'
+import { budgetView, lockCasinoBudget, saveCasinoBudget } from '../casino/budget.js'
+import { getPool, withTx } from '../db.js'
 import { ApiError, money } from '../errors.js'
 import { operatorConfig } from '../operator-config.js'
+import { activityCsv, activityRows, adminFeed, aviatorBudgetView, playerIdByPhone, playerReport, writeSuspension } from './admin.js'
 import { AVIATOR_CLIENT_SEED, avatarColor, crashHash, crashPointFromHash, initials, maskPhone, sha256 } from './fairness.js'
 import { assertAviatorRanges, aviatorSettings } from './settings.js'
 
@@ -42,6 +44,7 @@ function dbError(err: unknown): ApiError | null {
   if (message.includes('already_placed')) return new ApiError(409, 'already_placed')
   if (message.includes('betting_closed')) return new ApiError(409, 'betting_closed')
   if (message.includes('game_disabled')) return new ApiError(403, 'game_disabled')
+  if (message.includes('aviator_suspended')) return new ApiError(403, 'aviator_suspended')
   if (message.includes('bet_not_found')) return new ApiError(404, 'not_found')
   if (message.includes('bet_closed')) return new ApiError(409, 'bet_closed')
   if (message.includes('too_early')) return new ApiError(409, 'too_early')
@@ -404,11 +407,17 @@ export function registerAviatorRoutes(app: FastifyInstance, cfg: AppConfig) {
     const panel = panelField(body.panel)
     const auto = autoField(body.autoCashout)
     const idempotencyKey = keyField(body.idempotencyKey)
-    const current = await getPool(cfg).query<{ round_id: string | null, phase: string }>(
-      `SELECT round_id, phase FROM aviator_state WHERE id = 1`,
+    const current = await getPool(cfg).query<{ round_id: string | null, phase: string, min_stake_tzs: string | null, max_stake_tzs: string | null }>(
+      `SELECT s.round_id, s.phase, r.min_stake_tzs, r.max_stake_tzs
+         FROM aviator_state s
+         LEFT JOIN aviator_rounds r ON r.id = s.round_id
+        WHERE s.id = 1`,
     )
     const roundId = current.rows[0]?.round_id
     if (!roundId || current.rows[0]?.phase !== 'betting') throw new ApiError(409, 'betting_closed')
+    // The SQL function uses the limits stored on the round. These arguments are not the live settings.
+    const minStake = money(current.rows[0]?.min_stake_tzs ?? operatorConfig.aviatorMinStake)
+    const maxStake = money(current.rows[0]?.max_stake_tzs ?? operatorConfig.aviatorMaxStake)
     try {
       const placed = await getPool(cfg).query<{ result: { idempotent: boolean, bet_id: string, balance_tzs: number, stake_tzs: number, panel: number } }>(
         `SELECT place_aviator_bet_atomic($1, $2, $3, $4, $5, $6, $7, $8, $9) AS result`,
@@ -419,8 +428,8 @@ export function registerAviatorRoutes(app: FastifyInstance, cfg: AppConfig) {
           stakeTzs,
           auto,
           idempotencyKey,
-          operatorConfig.aviatorMinStake,
-          operatorConfig.aviatorMaxStake,
+          minStake,
+          maxStake,
           operatorConfig.aviatorEnabled,
         ],
       )
@@ -510,7 +519,8 @@ export function registerAviatorRoutes(app: FastifyInstance, cfg: AppConfig) {
 
   app.get('/api/admin/aviator', async (req) => {
     requireAdmin(cfg, req, false)
-    const snap = await loadPublic(cfg)
+    const feed = await adminFeed(cfg)
+    const budget = await aviatorBudgetView(cfg)
     const pool = getPool(cfg)
     const rounds = await pool.query<RoundRow>(
       `SELECT id, round_no, status, server_seed, server_seed_hash, client_seed, nonce, crash_hash,
@@ -553,16 +563,19 @@ export function registerAviatorRoutes(app: FastifyInstance, cfg: AppConfig) {
     const allPayouts = money(line?.all_payouts)
     return {
       live: {
-        enabled: snap.enabled,
-        phase: snap.phase,
-        multiplier: snap.multiplier,
-        countdownMs: snap.countdownMs,
-        round: snap.round,
-        viewerCount: snap.viewerCount,
-        openStakeTzs: snap.liveBets.filter((bet) => bet.status === 'active').reduce((sum, bet) => sum + bet.stakeTzs, 0),
-        betCount: snap.liveBets.length,
+        enabled: feed.enabled,
+        phase: feed.phase,
+        multiplier: feed.multiplier,
+        countdownMs: feed.countdownMs,
+        round: feed.round,
+        viewerCount: feed.viewerCount,
+        openStakeTzs: feed.players.filter((bet) => bet.status === 'active').reduce((sum, bet) => sum + bet.stakeTzs, 0),
+        betCount: feed.players.length,
+        players: feed.players,
+        roundLimits: feed.round,
       },
       settings: aviatorSettings(),
+      budget,
       pnl: {
         dayStakes,
         dayPayouts,
@@ -618,6 +631,9 @@ export function registerAviatorRoutes(app: FastifyInstance, cfg: AppConfig) {
   app.patch('/api/admin/aviator/settings', async (req) => {
     requireAdmin(cfg, req, true)
     const body = (req.body ?? {}) as Record<string, unknown>
+    for (const key of ['crashPoint', 'crash_point', 'serverSeed', 'server_seed', 'winners', 'userIds', 'pickWinners']) {
+      if (body[key] !== undefined) throw new ApiError(400, 'validation', { fields: { [key]: 'forbidden' } })
+    }
     const before = aviatorSettings()
     const next = { ...operatorConfig }
     const ints = [
@@ -692,5 +708,125 @@ export function registerAviatorRoutes(app: FastifyInstance, cfg: AppConfig) {
     await getPool(cfg).query(`DELETE FROM aviator_mutes WHERE user_id = $1`, [userId])
     await audit(cfg, req, 'admin.aviator.unmute', { userId })
     return { ok: true }
+  })
+
+  app.get('/api/admin/aviator/stream', async (req, reply) => {
+    requireAdmin(cfg, req, false)
+    reply.hijack()
+    const raw = reply.raw
+    raw.writeHead(200, {
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform',
+      Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    })
+    let closed = false
+    const push = async () => {
+      if (closed) return
+      try {
+        const feed = await adminFeed(cfg)
+        raw.write(`data: ${JSON.stringify(feed)}\n\n`)
+      } catch {
+        // The next tick retries. A closed socket is handled below.
+      }
+    }
+    const timer = setInterval(() => { void push() }, 300)
+    const stop = () => {
+      if (closed) return
+      closed = true
+      clearInterval(timer)
+      raw.end()
+    }
+    req.raw.on('close', stop)
+    req.raw.on('error', stop)
+    await push()
+  })
+
+  app.get('/api/admin/aviator/players', async (req) => {
+    requireAdmin(cfg, req, false)
+    const phone = (req.query as { phone?: unknown }).phone
+    if (typeof phone !== 'string' || !phone.trim()) throw new ApiError(400, 'validation', { fields: { phone: 'required' } })
+    return playerReport(cfg, await playerIdByPhone(cfg, phone))
+  })
+
+  app.get('/api/admin/aviator/players/:userId', async (req) => {
+    requireAdmin(cfg, req, false)
+    const { userId } = req.params as { userId: string }
+    if (!UUID.test(userId)) throw new ApiError(400, 'validation')
+    return playerReport(cfg, userId)
+  })
+
+  app.post('/api/admin/aviator/players/:userId/suspend', async (req) => {
+    requireAdmin(cfg, req, true)
+    const { userId } = req.params as { userId: string }
+    if (!UUID.test(userId)) throw new ApiError(400, 'validation')
+    const body = (req.body ?? {}) as { reason?: unknown }
+    const reason = typeof body.reason === 'string' ? body.reason.trim().slice(0, 200) : ''
+    const saved = await writeSuspension(cfg, userId, true, reason, req.auth!.userId)
+    await audit(cfg, req, 'admin.aviator.suspend', saved)
+    return saved
+  })
+
+  app.post('/api/admin/aviator/players/:userId/unsuspend', async (req) => {
+    requireAdmin(cfg, req, true)
+    const { userId } = req.params as { userId: string }
+    if (!UUID.test(userId)) throw new ApiError(400, 'validation')
+    const saved = await writeSuspension(cfg, userId, false, '', req.auth!.userId)
+    await audit(cfg, req, 'admin.aviator.unsuspend', saved)
+    return saved
+  })
+
+  app.get('/api/admin/aviator/activity', async (req, reply) => {
+    requireAdmin(cfg, req, false)
+    const query = req.query as { q?: unknown, kind?: unknown, limit?: unknown, format?: unknown }
+    const q = typeof query.q === 'string' ? query.q : ''
+    const kind = typeof query.kind === 'string' ? query.kind : ''
+    const format = query.format === 'csv' ? 'csv' : 'json'
+    const cap = format === 'csv' ? 5000 : 200
+    const fallback = format === 'csv' ? 2000 : 100
+    const parsed = typeof query.limit === 'string' ? Number(query.limit) : fallback
+    if (!Number.isInteger(parsed) || parsed < 1 || parsed > cap) {
+      throw new ApiError(400, 'validation', { fields: { limit: 'range' } })
+    }
+    const rows = await activityRows(cfg, { q, kind, limit: parsed })
+    if (format === 'csv') {
+      reply.header('Content-Type', 'text/csv; charset=utf-8')
+      reply.header('Content-Disposition', 'attachment; filename="aviator-activity.csv"')
+      return activityCsv(rows)
+    }
+    return { rows }
+  })
+
+  app.patch('/api/admin/aviator/budget', async (req) => {
+    requireAdmin(cfg, req, true)
+    const body = (req.body ?? {}) as { budgetTzs?: unknown, enabled?: unknown, resetCounters?: unknown, crashPoint?: unknown, winners?: unknown }
+    if (body.crashPoint !== undefined || body.winners !== undefined) {
+      throw new ApiError(400, 'validation', { fields: { crashPoint: 'forbidden' } })
+    }
+    const next: { budgetTzs?: number, enabled?: boolean, resetCounters?: boolean } = {}
+    if (body.budgetTzs !== undefined) {
+      if (typeof body.budgetTzs !== 'number' || !Number.isInteger(body.budgetTzs) || body.budgetTzs < 0 || body.budgetTzs > 1_000_000_000_000) {
+        throw new ApiError(400, 'validation', { fields: { budgetTzs: 'invalid' } })
+      }
+      next.budgetTzs = body.budgetTzs
+    }
+    if (body.enabled !== undefined) {
+      if (typeof body.enabled !== 'boolean') throw new ApiError(400, 'validation', { fields: { enabled: 'invalid' } })
+      next.enabled = body.enabled
+    }
+    if (body.resetCounters !== undefined) {
+      if (body.resetCounters !== true) throw new ApiError(400, 'validation', { fields: { resetCounters: 'invalid' } })
+      next.resetCounters = true
+    }
+    if (next.budgetTzs === undefined && next.enabled === undefined && !next.resetCounters) {
+      throw new ApiError(400, 'validation', { fields: { budget: 'empty' } })
+    }
+    const saved = await withTx(cfg, async (client) => {
+      const before = await lockCasinoBudget(client, 'aviator')
+      const after = await saveCasinoBudget(client, 'aviator', next)
+      return { before: budgetView(before), after: budgetView(after) }
+    })
+    await audit(cfg, req, 'admin.aviator.budget', saved)
+    return { ...saved.after, applies: 'next_round' }
   })
 }

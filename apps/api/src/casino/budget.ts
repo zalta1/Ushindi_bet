@@ -9,11 +9,13 @@ import { money } from '../errors.js'
  * a draw under `lossRate()` forces a save or a miss before that chance is used.
  * Zungusha uses the prize weights while its switch is off. While the switch is on,
  * a draw under `lossRate()` forces an active LOST prize before those weights.
+ * Aviator records stakes and payouts. The switch does not change the crash point.
+ * The value is copied onto the round when it opens and the flight never reads it back.
  */
 export const DEFAULT_LOSS_RATE = 0.8
 export const DEFAULT_BUDGET_TZS = 25_000
 
-export type CasinoGame = 'dice' | 'mines' | 'mayan' | 'penalty' | 'zungusha'
+export type CasinoGame = 'dice' | 'mines' | 'mayan' | 'penalty' | 'zungusha' | 'aviator'
 
 export type BudgetRow = {
   budgetTzs: number
@@ -28,6 +30,7 @@ const TABLES: Record<CasinoGame, string> = {
   mayan: 'mayan_budget',
   penalty: 'penalty_budget',
   zungusha: 'zungusha_budget',
+  aviator: 'aviator_budget',
 }
 
 type SqlRow = {
