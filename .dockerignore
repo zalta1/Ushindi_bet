@@ -8,3 +8,5 @@ node_modules
 **/*.test.ts
 *.md
 pitch-deck.html
+# Presentation demo. Separate compose project; never part of the real app image.
+aviator-demo

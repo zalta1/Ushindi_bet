@@ -1,0 +1,16 @@
+# Presentation only. This file is not the Ushindi compose file.
+# It has no Postgres, Redis, wallets, or payment service.
+services:
+  aviator-demo:
+    build: .
+    ports:
+      - "127.0.0.1:5180:5180"
+    environment:
+      NODE_ENV: production
+      PORT: "5180"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5180/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 15s
