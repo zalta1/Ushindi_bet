@@ -47,15 +47,20 @@ async function openRound(client: PoolClient): Promise<string> {
   const nonceRow = await client.query<{ n: string }>(`SELECT nextval('aviator_round_no_seq') AS n`)
   const nonce = Number(nonceRow.rows[0].n)
   const hash = crashHash(serverSeed, AVIATOR_CLIENT_SEED, nonce)
+  // The budget switch is stored on the round and is not an input to this formula.
   const crash = crashPointFromHash(hash, operatorConfig.aviatorRtpBps / 100, operatorConfig.aviatorMaxMultiplier)
   const bettingMs = operatorConfig.aviatorBettingMs
+  const budget = await client.query<{ enabled: boolean }>(`SELECT enabled FROM aviator_budget WHERE id`)
+  const budgetEnabled = Boolean(budget.rows[0]?.enabled)
   const inserted = await client.query<{ id: string }>(
     `INSERT INTO aviator_rounds (
        round_no, status, server_seed, server_seed_hash, client_seed, nonce, crash_hash,
-       crash_point, rtp_bps, max_multiplier, max_win_tzs, betting_ms, betting_ends_at
+       crash_point, rtp_bps, max_multiplier, max_win_tzs, betting_ms, betting_ends_at,
+       min_stake_tzs, max_stake_tzs, crashed_ms, budget_enabled
      ) VALUES (
        $1, 'betting', $2, $3, $4, $1, $5,
-       $6, $7, $8, $9, $10, clock_timestamp() + make_interval(secs => $11::double precision / 1000.0)
+       $6, $7, $8, $9, $10, clock_timestamp() + make_interval(secs => $11::double precision / 1000.0),
+       $12, $13, $14, $15
      ) RETURNING id`,
     [
       nonce,
@@ -69,6 +74,10 @@ async function openRound(client: PoolClient): Promise<string> {
       operatorConfig.aviatorMaxWin,
       bettingMs,
       bettingMs,
+      operatorConfig.aviatorMinStake,
+      operatorConfig.aviatorMaxStake,
+      operatorConfig.aviatorCrashedMs,
+      budgetEnabled,
     ],
   )
   const id = inserted.rows[0].id
@@ -172,7 +181,15 @@ async function advance(client: PoolClient): Promise<TickValue> {
   }
 
   if (phase === 'crashed') {
-    if (elapsed < operatorConfig.aviatorCrashedMs) return { action: 'crashed', roundId: roundId ?? undefined }
+    let waitMs = operatorConfig.aviatorCrashedMs
+    if (roundId) {
+      const timing = await client.query<{ crashed_ms: number }>(
+        `SELECT crashed_ms FROM aviator_rounds WHERE id = $1`,
+        [roundId],
+      )
+      if (timing.rows[0]) waitMs = timing.rows[0].crashed_ms
+    }
+    if (elapsed < waitMs) return { action: 'crashed', roundId: roundId ?? undefined }
     if (!enabled) {
       await client.query(
         `UPDATE aviator_state
