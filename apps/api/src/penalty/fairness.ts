@@ -54,10 +54,20 @@ export function nextUnit(hash: string, offset: number): number {
  * A save and a miss both pay nothing. The published edge function is not in
  * the PesaBetPro source, so the non-paying shots are split in half: the lower
  * half is a save (the keeper is on the target) and the upper half is a miss.
+ * When the Penalty budget switch is on, a draw under the loss rate forces that
+ * non-paying result before the zone chance is consulted, the same way Dice
+ * forces a loss while its budget is on.
  */
-export function outcomeFromRolls(winChance: number, roll: number, split: number): PenaltyOutcome {
+export function outcomeFromRolls(
+  winChance: number,
+  roll: number,
+  split: number,
+  force?: { rate: number; draw: number },
+): PenaltyOutcome {
+  const missed: PenaltyOutcome = split < 0.5 ? 'saved' : 'miss'
+  if (force && force.draw < force.rate) return missed
   if (roll < winChance) return 'goal'
-  return split < 0.5 ? 'saved' : 'miss'
+  return missed
 }
 
 export function keeperFor(target: string, outcome: PenaltyOutcome, pick: number): string {

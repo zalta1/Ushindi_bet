@@ -107,6 +107,8 @@ test('zone prices stay near 90 percent RTP and the hash roll decides the kick', 
   assert.equal(outcomeFromRolls(0.18, 0.18, 0.1), 'saved')
   assert.equal(outcomeFromRolls(0.18, 0.5, 0.1), 'saved')
   assert.equal(outcomeFromRolls(0.18, 0.5, 0.9), 'miss')
+  assert.equal(outcomeFromRolls(0.18, 0, 0.9, { rate: 0.98, draw: 0 }), 'miss')
+  assert.equal(outcomeFromRolls(0.18, 0, 0.1, { rate: 0.98, draw: 0.99 }), 'goal')
   assert.equal(keeperFor('top-left', 'saved', 0.99), 'top-left')
   assert.equal(keeperFor('top-left', 'goal', 0), 'top-center')
   assert.notEqual(keeperFor('top-left', 'miss', 0.99), 'top-left')
@@ -289,7 +291,7 @@ test('penalty rejects an empty zone, a stranger zone, a short stake, a short wal
   operatorConfig.penaltyEnabled = true
 })
 
-test('an admin can edit a zone, and a drained budget still pays a goal', async () => {
+test('an admin can edit a zone, and a drained budget forces a loss', async () => {
   const { admin, player } = await adminAndPlayer(20_000)
   const board = await admin.client.send('GET', '/api/admin/penalty')
   assert.equal(board.status, 200, JSON.stringify(board.json))
@@ -341,6 +343,14 @@ test('an admin can edit a zone, and a drained budget still pays a goal', async (
   assert.equal(danger.json.budget.healthLabel, 'danger')
 
   queue([0, 0.1, 0.4])
+  const forced = await player.client.send('POST', '/api/penalty/shoot', {
+    zoneKey: 'top-left', stakeTzs: 500, idempotencyKey: randomUUID(),
+  })
+  assert.equal(forced.status, 200, JSON.stringify(forced.json))
+  assert.notEqual(forced.json.shot.outcome, 'goal')
+  assert.equal(forced.json.shot.payoutTzs, 0)
+
+  queue([0.99, 0, 0.1, 0.4])
   const goalKey = randomUUID()
   const paid = await player.client.send('POST', '/api/penalty/shoot', {
     zoneKey: 'top-left', stakeTzs: 500, idempotencyKey: goalKey,
@@ -355,7 +365,7 @@ test('an admin can edit a zone, and a drained budget still pays a goal', async (
   const counters = await pool.query<{ bets: string; payouts: string }>(
     `SELECT total_bets_tzs::text AS bets, total_payouts_tzs::text AS payouts FROM penalty_budget`,
   )
-  assert.equal(counters.rows[0].bets, '500')
+  assert.equal(counters.rows[0].bets, '1000')
   assert.equal(counters.rows[0].payouts, '27500')
 
   const reset = await admin.client.send('PATCH', '/api/admin/penalty/budget', { resetCounters: true, enabled: false })

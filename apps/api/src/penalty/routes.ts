@@ -5,7 +5,7 @@ import type { AppConfig } from '../config.js'
 import { saveOperatorSettings } from '../admin/settings-store.js'
 import { isAdminRole } from '../admin/roles.js'
 import { assertCsrf, assertOrigin } from '../auth/sessions.js'
-import { addCasinoTurnover, budgetView, lockCasinoBudget, readCasinoBudget, saveCasinoBudget } from '../casino/budget.js'
+import { addCasinoTurnover, budgetView, lockCasinoBudget, lossRate, readCasinoBudget, saveCasinoBudget } from '../casino/budget.js'
 import { getPool, withTx } from '../db.js'
 import { ApiError, money } from '../errors.js'
 import { operatorConfig } from '../operator-config.js'
@@ -236,7 +236,7 @@ export function registerPenaltyRoutes(app: FastifyInstance, cfg: AppConfig) {
           if (owner.rows[0].user_id !== req.auth!.userId) throw new ApiError(409, 'idempotency_conflict')
           return { duplicate: true, shot: existing.rows[0], balance: await balanceOf(client, req.auth!.userId) }
         }
-        await lockCasinoBudget(client, 'penalty')
+        const budget = await lockCasinoBudget(client, 'penalty')
         const locked = await client.query<ZoneRow>(
           `SELECT zone_key, label, multiplier, win_chance, display_order, is_active
              FROM penalty_zones
@@ -254,12 +254,19 @@ export function registerPenaltyRoutes(app: FastifyInstance, cfg: AppConfig) {
         const nonce = prior.rows[0]?.n ?? 0
         const serverSeed = newServerSeed()
         const hash = penaltyHash(serverSeed, seed, nonce)
-        const roll = nextUnit(hash, 0)
-        const split = nextUnit(hash, 13)
-        const pick = nextUnit(hash, 26)
+        const forcing = budget.enabled
+        const forceDraw = forcing ? nextUnit(hash, 0) : 0
+        const roll = nextUnit(hash, forcing ? 13 : 0)
+        const split = nextUnit(hash, forcing ? 26 : 13)
+        const pick = nextUnit(hash, forcing ? 39 : 26)
         const winChance = Number(zone.win_chance)
         const multiplier = Number(zone.multiplier)
-        const outcome = outcomeFromRolls(winChance, roll, split)
+        const outcome = outcomeFromRolls(
+          winChance,
+          roll,
+          split,
+          forcing ? { rate: lossRate(budget), draw: forceDraw } : undefined,
+        )
         const keeper = keeperFor(zone.zone_key, outcome, pick)
         const payout = outcome === 'goal' ? penaltyPayout(stake, multiplier, limits.penaltyMaxPayout) : 0
         const shotId = randomUUID()

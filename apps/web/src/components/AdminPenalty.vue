@@ -54,6 +54,11 @@ async function save() {
   }
 }
 
+async function saveAll() {
+  await save()
+  if (!error.value) await saveZones()
+}
+
 async function saveZones() {
   error.value = ''
   notice.value = ''
@@ -101,49 +106,63 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div data-testid="admin-penalty">
+  <div data-testid="admin-penalty" class="penalty-admin">
+    <div class="penalty-admin-head">
+      <h2>⚽ Penalty Casino</h2>
+      <div class="chips">
+        <button type="button" @click="load">Refresh</button>
+        <button type="button" data-testid="admin-penalty-save" @click="saveAll">Hifadhi</button>
+      </div>
+    </div>
     <p v-if="error" class="form-error" data-testid="admin-penalty-error">{{ error }}</p>
     <p v-if="notice" data-testid="admin-penalty-notice">{{ notice }}</p>
+    <div v-if="pnl" class="penalty-admin-stats">
+      <div class="card"><small>Penalti Zote</small><b>{{ pnl.shots }}</b></div>
+      <div class="card"><small>Bets</small><b>TZS {{ money(pnl.stakes).replace('TSH ', '') }}</b></div>
+      <div class="card"><small>Malipo</small><b>TZS {{ money(pnl.payouts).replace('TSH ', '') }}</b></div>
+      <div class="card"><small>Faida (RTP {{ (pnl.rtp * 100).toFixed(1) }}%)</small><b :class="pnl.profit >= 0 ? 'up' : 'down'">TZS {{ money(pnl.profit).replace('TSH ', '') }}</b></div>
+    </div>
     <p class="muted">{{ $t('penalty.adminHelp') }}</p>
-    <p v-if="pnl">
-      {{ $t('penalty.adminBets') }} {{ pnl.shots }} · {{ $t('penalty.adminGoals') }} {{ pnl.goals }} ·
-      {{ $t('penalty.stake') }} {{ money(pnl.stakes) }} · {{ $t('penalty.adminPayouts') }} {{ money(pnl.payouts) }} ·
-      {{ $t('penalty.adminProfit') }} {{ money(pnl.profit) }} · {{ $t('penalty.adminRtp') }} {{ (pnl.rtp * 100).toFixed(1) }}%
-    </p>
-    <form v-if="settings" class="jackpot-form" @submit.prevent="save">
-      <label>{{ $t('penalty.adminEnabled') }}
+    <form v-if="settings" class="card" @submit.prevent="save">
+      <div class="penalty-admin-head">
+        <div>
+          <b>Washa Mchezo</b>
+          <p class="muted">Ukizima, wachezaji hawataweza kupiga penalti.</p>
+        </div>
         <input v-model="settings.penaltyEnabled" data-testid="admin-penalty-enabled" type="checkbox" />
-      </label>
-      <label>{{ $t('penalty.adminMin') }}
-        <input v-model.number="settings.penaltyMinStake" data-testid="admin-penalty-min" type="number" min="100" step="1" />
-      </label>
-      <label>{{ $t('penalty.adminMax') }}
-        <input v-model.number="settings.penaltyMaxStake" data-testid="admin-penalty-max" type="number" min="100" step="1" />
-      </label>
-      <label>{{ $t('penalty.adminMaxWin') }}
-        <input v-model.number="settings.penaltyMaxPayout" data-testid="admin-penalty-max-win" type="number" min="1" step="1" />
-      </label>
-      <button type="submit" data-testid="admin-penalty-save">{{ $t('adminSave') }}</button>
+      </div>
+      <div class="jackpot-form">
+        <label>Bet ya Chini (TZS)
+          <input v-model.number="settings.penaltyMinStake" data-testid="admin-penalty-min" type="number" min="100" step="1" />
+        </label>
+        <label>Bet ya Juu (TZS)
+          <input v-model.number="settings.penaltyMaxStake" data-testid="admin-penalty-max" type="number" min="100" step="1" />
+        </label>
+        <label>Kikomo cha Malipo (TZS)
+          <input v-model.number="settings.penaltyMaxPayout" data-testid="admin-penalty-max-win" type="number" min="1" step="1" />
+        </label>
+      </div>
     </form>
 
-    <form class="penalty-zones-form" @submit.prevent="saveZones">
-      <div v-for="zone in zones" :key="zone.zoneKey" class="card">
-        <b>{{ zone.zoneKey }}</b>
-        <label>{{ $t('penalty.adminLabel') }}
+    <form class="card" @submit.prevent="saveZones">
+      <h3>Maeneo ya Goli</h3>
+      <p class="muted">Kizidishi (x) na nafasi ya kufunga (%). Kadiri kizidishi kinavyoongezeka, punguza nafasi ya kufunga.</p>
+      <div v-for="zone in zones" :key="zone.zoneKey" class="penalty-zone-row">
+        <label>
           <input v-model="zone.label" :data-testid="`admin-penalty-zone-${zone.zoneKey}-label`" maxlength="40" />
+          <small>{{ zone.zoneKey }}</small>
         </label>
-        <label>{{ $t('penalty.adminMult') }}
+        <label>
           <input v-model.number="zone.multiplier" :data-testid="`admin-penalty-zone-${zone.zoneKey}-mult`" type="number" min="1" max="1000" step="0.1" />
+          <small>Kizidishi (x)</small>
         </label>
-        <label>{{ $t('penalty.adminChance') }}
+        <label>
           <input v-model.number="zone.winChance" :data-testid="`admin-penalty-zone-${zone.zoneKey}-chance`" type="number" min="0" max="0.95" step="0.001" />
+          <small>Nafasi ({{ (Number(zone.winChance) * 100).toFixed(1) }}%) · RTP {{ rtp(zone) }}%</small>
         </label>
-        <label>{{ $t('penalty.adminActive') }}
-          <input v-model="zone.isActive" :data-testid="`admin-penalty-zone-${zone.zoneKey}-active`" type="checkbox" />
-        </label>
-        <span>{{ $t('penalty.adminRtp') }} {{ rtp(zone) }}%</span>
+        <input v-model="zone.isActive" :data-testid="`admin-penalty-zone-${zone.zoneKey}-active`" type="checkbox" />
       </div>
-      <button type="submit" data-testid="admin-penalty-zones-save">{{ $t('penalty.adminSaveZones') }}</button>
+      <button type="submit" data-testid="admin-penalty-zones-save">Hifadhi</button>
     </form>
 
     <section v-if="budget" class="card dice-budget" data-testid="admin-penalty-budget">

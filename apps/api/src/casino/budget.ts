@@ -5,7 +5,8 @@ import { money } from '../errors.js'
  * PesaBetPro's default when the budget switch is off.
  * Dice uses this rate only while its switch is on.
  * Mayan always calls `lossRate()`, so a disabled budget still returns 0.80.
- * Penalty keeps the same budget row for the admin, and the kick still uses the zone win chance.
+ * Penalty uses the zone win chance while its switch is off. While the switch is on,
+ * a draw under `lossRate()` forces a save or a miss before that chance is used.
  */
 export const DEFAULT_LOSS_RATE = 0.8
 export const DEFAULT_BUDGET_TZS = 25_000
