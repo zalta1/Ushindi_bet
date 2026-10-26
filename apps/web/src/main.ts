@@ -15,6 +15,7 @@ import Dice from './views/Dice.vue'
 import Mines from './views/Mines.vue'
 import Mayan from './views/Mayan.vue'
 import Penalty from './views/Penalty.vue'
+import Zungusha from './views/Zungusha.vue'
 import AviatorFair from './views/AviatorFair.vue'
 import Promotions from './views/Promotions.vue'
 import Search from './views/Search.vue'
@@ -44,6 +45,7 @@ const routes = [
   { path: '/mines', component: Mines },
   { path: '/mayan', component: Mayan },
   { path: '/penalty', component: Penalty },
+  { path: '/zungusha', component: Zungusha },
   { path: '/aviator/fair', component: AviatorFair },
   { path: '/crash', redirect: '/aviator' },
   { path: '/promotions', component: Promotions },

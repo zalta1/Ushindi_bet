@@ -8,6 +8,7 @@ import AdminDice from '../components/AdminDice.vue'
 import AdminMines from '../components/AdminMines.vue'
 import AdminMayan from '../components/AdminMayan.vue'
 import AdminPenalty from '../components/AdminPenalty.vue'
+import AdminZungusha from '../components/AdminZungusha.vue'
 import { ApiClientError, api } from '../api'
 import { useAuth } from '../stores/store'
 
@@ -21,7 +22,7 @@ type SectionId =
 const ready = new Set<SectionId>([
   'overview', 'users', 'banners', 'notifications', 'announcements',
   'wallet-audit', 'audit', 'account', 'admins', 'settings',
-  'match-api', 'matches', 'bets', 'two-up-markets', 'aviator', 'dice', 'mines', 'mayan', 'penalty', 'jackpots',
+  'match-api', 'matches', 'bets', 'two-up-markets', 'aviator', 'dice', 'mines', 'mayan', 'zungusha', 'penalty', 'jackpots',
 ])
 
 const menu: SectionId[] = [
@@ -896,6 +897,10 @@ async function deleteNote(id: string) {
 
     <section v-else-if="section === 'mayan'">
       <AdminMayan />
+    </section>
+
+    <section v-else-if="section === 'zungusha'">
+      <AdminZungusha />
     </section>
 
     <section v-else-if="section === 'penalty'">

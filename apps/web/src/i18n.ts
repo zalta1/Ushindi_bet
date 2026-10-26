@@ -82,6 +82,13 @@ const sw = {
     budgetRemaining: 'Bajeti iliyobaki', budgetAmount: 'Bajeti', budgetLoss: 'Loss rate', budgetCap: 'Kikomo cha malipo (55%)', budgetCapHit: 'Kikomo kimefikiwa', budgetSet: 'Weka bajeti mpya', budgetSave: 'Hifadhi bajeti', budgetReset: 'Rejesha 0', budgetSaved: 'Bajeti ya Penalty imehifadhiwa.',
     health_good: 'Afya Nzuri', health_normal: 'Kawaida', health_caution: 'Tahadhari', health_recovery: 'Recovery Mode', health_danger: 'Hatari',
   },
+  zungusha: {
+    adminHelp: 'Uwezekano ni uzito uliogawanywa na jumla ya uzito. Idadi ya segments inarudia kipande kwenye gurudumu tu. Malipo ni kiasi cha tuzo, si dau kuzidisha. Bajeti ikizimwa, spin inatumia uzito. Ukiwasha, droo chini ya loss rate inalazimisha tuzo ya LOST. Kikomo cha asilimia 55 ni onyo tu. Bajeti ya Zungusha iko peke yake.',
+    adminBets: 'Dau', adminPayouts: 'Malipo',
+    budgetTitle: 'Tumia Bajeti — Zungusha', budgetOn: 'ON: Droo chini ya loss rate inalazimisha tuzo ya LOST kabla ya uzito. Kikomo cha 55% kinaonyeshwa na hakizuii tuzo iliyopita droo.', budgetOff: 'OFF: Spin inatumia uzito tu. Hakuna hasara ya kulazimishwa.',
+    budgetRemaining: 'Bajeti iliyobaki', budgetAmount: 'Bajeti', budgetLoss: 'Loss rate', budgetCap: 'Kikomo cha malipo (55%)', budgetCapHit: 'Kikomo kimefikiwa', budgetSet: 'Weka bajeti mpya', budgetSave: 'Hifadhi bajeti', budgetReset: 'Rejesha 0', budgetSaved: 'Bajeti ya Zungusha imehifadhiwa.',
+    health_good: 'Afya Nzuri', health_normal: 'Kawaida', health_caution: 'Tahadhari', health_recovery: 'Recovery Mode', health_danger: 'Hatari',
+  },
   adminNav: { overview: 'Overview', transactions: 'Miamala', 'payment-api': 'API za Malipo', 'speedpesa-logs': 'SpeedPesa Logs', 'vodacom-deposits': 'Vodacom Deposits', 'withdrawal-requests': 'Maombi ya Kutoa Pesa', reports: 'Ripoti za Watumiaji', support: 'Msaada', sms: 'SMS Bulk', users: 'Watumiaji', 'match-api': 'API', matches: 'Mechi', 'two-up-markets': '2UP Markets', aviator: 'Aviator', dice: 'Dice', mines: 'Mines', mayan: 'Mayan Gold', zungusha: 'Zungusha Shinda', penalty: 'Penalty Casino', jackpots: 'Jackpots', 'casino-budget': 'Bajeti Casino', banners: 'Banners', bets: 'Bets', notifications: 'Notifications', announcements: 'Matangazo', 'wallet-audit': 'Wallet Audit', audit: 'Audit & Fraud', account: 'Akaunti & Futa', admins: 'Simamia Admin', settings: 'Settings' },
 }
 
@@ -165,6 +172,13 @@ const en = {
     adminSaved: 'Penalty settings saved.', zonesSaved: 'Zones saved.', adminEnabled: 'Enabled', adminMin: 'Minimum stake', adminMax: 'Maximum stake', adminMaxWin: 'Maximum payout', adminBets: 'Bets', adminPayouts: 'Payouts', adminProfit: 'Profit', adminGoals: 'Goals', adminRtp: 'RTP', adminChance: 'Goal chance', adminLabel: 'Label', adminMult: 'Multiplier', adminActive: 'Active', adminSaveZones: 'Save zones',
     budgetTitle: 'Use budget — Penalty', budgetOn: 'ON: A draw under the loss rate forces a save or a miss. The 55% cap is shown and does not cancel a goal that passed the draw.', budgetOff: 'OFF: The kick uses the zone chance only. Nothing is forced.',
     budgetRemaining: 'Budget remaining', budgetAmount: 'Budget', budgetLoss: 'Loss rate', budgetCap: 'Payout cap (55%)', budgetCapHit: 'Cap reached', budgetSet: 'Set a new budget', budgetSave: 'Save budget', budgetReset: 'Reset to 0', budgetSaved: 'Penalty budget saved.',
+    health_good: 'Healthy', health_normal: 'Normal', health_caution: 'Caution', health_recovery: 'Recovery mode', health_danger: 'Danger',
+  },
+  zungusha: {
+    adminHelp: 'The chance is the weight divided by the sum of the weights. Segment count only repeats a slice on the wheel. The payout is the prize amount, not the stake times a multiplier. With the budget off, the spin uses the weights. With it on, a draw under the loss rate forces a LOST prize. The 55 percent cap is a warning only. The Zungusha budget is separate from the other games.',
+    adminBets: 'Bets', adminPayouts: 'Payouts',
+    budgetTitle: 'Use budget — Zungusha', budgetOn: 'ON: A draw under the loss rate forces a LOST prize before the weights. The 55% cap is shown and does not cancel a prize that passed the draw.', budgetOff: 'OFF: The spin uses the weights only. Nothing is forced.',
+    budgetRemaining: 'Budget remaining', budgetAmount: 'Budget', budgetLoss: 'Loss rate', budgetCap: 'Payout cap (55%)', budgetCapHit: 'Cap reached', budgetSet: 'Set a new budget', budgetSave: 'Save budget', budgetReset: 'Reset to 0', budgetSaved: 'Zungusha budget saved.',
     health_good: 'Healthy', health_normal: 'Normal', health_caution: 'Caution', health_recovery: 'Recovery mode', health_danger: 'Danger',
   },
   adminNav: { overview: 'Overview', transactions: 'Transactions', 'payment-api': 'Payment APIs', 'speedpesa-logs': 'SpeedPesa Logs', 'vodacom-deposits': 'Vodacom Deposits', 'withdrawal-requests': 'Withdrawal requests', reports: 'User reports', support: 'Support', sms: 'SMS bulk', users: 'Users', 'match-api': 'Match API', matches: 'Matches', 'two-up-markets': '2UP Markets', aviator: 'Aviator', dice: 'Dice', mines: 'Mines', mayan: 'Mayan Gold', zungusha: 'Spin and win', penalty: 'Penalty casino', jackpots: 'Jackpots', 'casino-budget': 'Casino budget', banners: 'Banners', bets: 'Bets', notifications: 'Notifications', announcements: 'Announcements', 'wallet-audit': 'Wallet audit', audit: 'Audit and fraud', account: 'Accounts', admins: 'Manage admins', settings: 'Settings' },

@@ -7,11 +7,13 @@ import { money } from '../errors.js'
  * Mayan always calls `lossRate()`, so a disabled budget still returns 0.80.
  * Penalty uses the zone win chance while its switch is off. While the switch is on,
  * a draw under `lossRate()` forces a save or a miss before that chance is used.
+ * Zungusha uses the prize weights while its switch is off. While the switch is on,
+ * a draw under `lossRate()` forces an active LOST prize before those weights.
  */
 export const DEFAULT_LOSS_RATE = 0.8
 export const DEFAULT_BUDGET_TZS = 25_000
 
-export type CasinoGame = 'dice' | 'mines' | 'mayan' | 'penalty'
+export type CasinoGame = 'dice' | 'mines' | 'mayan' | 'penalty' | 'zungusha'
 
 export type BudgetRow = {
   budgetTzs: number
@@ -25,6 +27,7 @@ const TABLES: Record<CasinoGame, string> = {
   mines: 'mines_budget',
   mayan: 'mayan_budget',
   penalty: 'penalty_budget',
+  zungusha: 'zungusha_budget',
 }
 
 type SqlRow = {

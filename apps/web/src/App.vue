@@ -31,6 +31,7 @@ const isDiceRoute = computed(() => route.path.startsWith('/dice'))
 const isMinesRoute = computed(() => route.path.startsWith('/mines'))
 const isMayanRoute = computed(() => route.path.startsWith('/mayan'))
 const isPenaltyRoute = computed(() => route.path.startsWith('/penalty'))
+const isZungushaRoute = computed(() => route.path.startsWith('/zungusha'))
 function loadPublic() {
   if (auth.user?.mustChangePassword) return
   void ms.load()
@@ -59,6 +60,7 @@ const menu = computed(() => [
   { to: '/mines', icon: '💎', label: 'Mines' },
   { to: '/mayan', icon: '🏛️', label: 'Mayan Gold' },
   { to: '/penalty', icon: '⚽', label: 'Penalty' },
+  { to: '/zungusha', icon: '🎡', label: 'Zungusha' },
   { to: '/casino', icon: '🎰', label: t('casino') },
   { to: '/promotions', icon: '🎁', label: t('promos'), badge: promos.length },
   { to: '/virtuals', icon: '🎮', label: t('virtuals') },
@@ -92,7 +94,7 @@ const sportIcon = (name: string) => ({ Football: '⚽', Basketball: '🏀', Tenn
     <RouterLink class="deposit-btn" to="/deposit">{{$t('deposit')}}</RouterLink>
   </header>
 
-  <div class="layout" :class="{ collapsed, 'drawer-open': mobileOpen, 'admin-route': isAdminRoute, 'aviator-route': isAviatorRoute, 'dice-route': isDiceRoute, 'mines-route': isMinesRoute, 'mayan-route': isMayanRoute, 'penalty-route': isPenaltyRoute }">
+  <div class="layout" :class="{ collapsed, 'drawer-open': mobileOpen, 'admin-route': isAdminRoute, 'aviator-route': isAviatorRoute, 'dice-route': isDiceRoute, 'mines-route': isMinesRoute, 'mayan-route': isMayanRoute, 'penalty-route': isPenaltyRoute, 'zungusha-route': isZungushaRoute }">
     <div v-if="mobileOpen" class="panel-backdrop" @click="closeMobile"></div>
 
     <!-- Retractable left panel: flush at left:0, retracts fully off-edge when collapsed (header ☰ reopens it). Main menu (no Login/Deposit/Balance) + sports list below -->
@@ -121,10 +123,10 @@ const sportIcon = (name: string) => ({ Football: '⚽', Basketball: '🏀', Tenn
     </aside>
 
     <main><RouterView /></main>
-    <aside v-if="!isAdminRoute && !isAviatorRoute && !isDiceRoute && !isMinesRoute && !isMayanRoute && !isPenaltyRoute" class="slip-d"><Betslip /></aside>
+    <aside v-if="!isAdminRoute && !isAviatorRoute && !isDiceRoute && !isMinesRoute && !isMayanRoute && !isPenaltyRoute && !isZungushaRoute" class="slip-d"><Betslip /></aside>
   </div>
 
-  <nav v-if="!isAdminRoute && !isAviatorRoute && !isDiceRoute && !isMinesRoute && !isMayanRoute && !isPenaltyRoute" class="bottombar"><RouterLink to="/">Home</RouterLink><RouterLink to="/live">Live</RouterLink><button @click="slip.open=true">Slip ({{slip.items.length}})</button><RouterLink to="/casino">Casino</RouterLink><RouterLink to="/profile">Profile</RouterLink></nav>
+  <nav v-if="!isAdminRoute && !isAviatorRoute && !isDiceRoute && !isMinesRoute && !isMayanRoute && !isPenaltyRoute && !isZungushaRoute" class="bottombar"><RouterLink to="/">Home</RouterLink><RouterLink to="/live">Live</RouterLink><button @click="slip.open=true">Slip ({{slip.items.length}})</button><RouterLink to="/casino">Casino</RouterLink><RouterLink to="/profile">Profile</RouterLink></nav>
   <div v-if="slip.open"><Betslip /></div>
   <footer v-if="!isAdminRoute && !isAviatorRoute" style="padding:20px;text-align:center"><p class="seo">Ushindi Bet ni jukwaa la kubeti michezo na kasino lililotengenezwa kwa soko la Tanzania — kwa Kiswahili na Kiingereza, malipo kwa shilingi (TZS) kupitia njia za simu, na mechi za ndani na za kimataifa. Tunasisitiza uwazi: masharti ya uondoaji pesa yanaonyeshwa kabla ya kuweka amana, bonasi pekee ndiyo yenye masharti ya wagering, na zana za kudhibiti matumizi kama viwango vya amana, kupumzika na kujiondoa zinapatikana kila wakati. Ushindi Bet is an original Tanzanian sports-betting and casino platform in Swahili and English, using TZS and mobile-money — with clear withdrawal terms shown before deposit, bonus-only wagering, and responsible-gambling tools including deposit limits, cooldown and self-exclusion.</p><small>Ushindi Bet — Sandbox demo, no real money. 18+. Gaming Board of Tanzania licence required for real launch. Africa/Dar_es_Salaam · <RouterLink to="/responsible-gambling">Responsible Gambling</RouterLink> · <RouterLink to="/terms">Terms</RouterLink> · <RouterLink to="/privacy">Privacy</RouterLink></small></footer>
 </template>

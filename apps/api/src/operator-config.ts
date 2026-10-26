@@ -66,6 +66,11 @@ export const operatorConfig = {
   penaltyMinStake: 500,
   penaltyMaxStake: 100_000,
   penaltyMaxPayout: 2_000_000,
+  zungushaEnabled: true,
+  zungushaSpinCost: 500,
+  zungushaMinStake: 100,
+  zungushaMaxStake: 100_000,
+  zungushaMaxPayout: 5_000_000,
   currency: 'TZS' as const,
 }
 
@@ -107,6 +112,10 @@ export const INT_SETTING_KEYS = [
   'penaltyMinStake',
   'penaltyMaxStake',
   'penaltyMaxPayout',
+  'zungushaSpinCost',
+  'zungushaMinStake',
+  'zungushaMaxStake',
+  'zungushaMaxPayout',
 ] as const
 
 export const BOOL_SETTING_KEYS = [
@@ -122,6 +131,7 @@ export const BOOL_SETTING_KEYS = [
   'minesEnabled',
   'mayanEnabled',
   'penaltyEnabled',
+  'zungushaEnabled',
 ] as const
 
 export type IntSettingKey = (typeof INT_SETTING_KEYS)[number]
