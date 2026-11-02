@@ -4,7 +4,7 @@ import path from 'node:path'
 import { test } from 'node:test'
 import { fileURLToPath } from 'node:url'
 import { DemoEngine, nairobiClock } from './engine.ts'
-import { DEMO_CLIENT_SEED, DEMO_MAX_MULTIPLIER, DEMO_RTP_PCT, crashHash, crashPointFromHash, sha256 } from './fairness.ts'
+import { DEMO_CLIENT_SEED, DEMO_MAX_MULTIPLIER, DEMO_RTP_PCT, crashHash, crashPointFromHash, multiplierAt, secondsFor, sha256 } from './fairness.ts'
 import { createApp } from './index.ts'
 
 function harness(opts?: { seeds?: string[], random?: () => number, bots?: boolean }) {
@@ -138,7 +138,8 @@ test('fly-away timing cashes the marked player under the chosen crash', () => {
   assert.equal(bet.payout, 1245)
   assert.equal(h.engine.round.crashPoint, 2.5)
   const flight = (h.engine.round.crashedAt ?? 0) - (h.engine.round.flightStartedAt ?? 0)
-  assert.ok(flight >= 800 && flight <= 850)
+  const natural = secondsFor(2.5) * 1000
+  assert.ok(Math.abs(flight - natural) < 80, `flight ${flight} natural ${natural}`)
 })
 
 test('automatic clears the queued crash and winners for the following round', () => {
@@ -278,19 +279,25 @@ test('odds schedule plays each odd in order, then returns to automatic', () => {
   assert.match(texts(), /Next round returned to automatic/)
 })
 
-test('time cap shortens a long flight and leaves a short odd on the natural curve', () => {
+test('set odds use the natural curve and the time cap does not speed them up', () => {
   const h = harness()
   const entries = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => ({ crash: i === 0 ? 30 : 1.05, winnerIds: [] as string[] }))
   h.engine.startSchedule({ capSec: 2, entries })
   nextRound(h)
   assert.equal(h.engine.round.crashPoint, 30)
-  assert.equal(h.engine.round.flyAwayMs, 2000)
-  untilCrashed(h)
-  const flight = (h.engine.round.crashedAt ?? 0) - (h.engine.round.flightStartedAt ?? 0)
-  assert.ok(flight >= 2000 && flight <= 2100)
-  nextRound(h)
-  assert.equal(h.engine.round.crashPoint, 1.05)
   assert.equal(h.engine.round.flyAwayMs, 0)
+  const view = h.engine.adminView().schedule
+  assert.equal(view.entries[0].overCap, true)
+  assert.equal(view.entries[1].overCap, false)
+  h.advance(h.engine.round.takeoffMs)
+  assert.equal(h.engine.round.phase, 'flying')
+  h.advance(2000)
+  assert.equal(h.engine.round.phase, 'flying')
+  assert.equal(h.engine.playerView().multiplier, multiplierAt(2))
+  assert.ok(multiplierAt(2) < 5)
+  h.advance(2000)
+  assert.equal(h.engine.playerView().multiplier, multiplierAt(4))
+  assert.equal(h.engine.round.phase, 'flying')
 })
 
 test('a schedule row can mark winners, and pause holds the next odd', () => {
@@ -409,7 +416,7 @@ test('a flying round delays the first odd, then the rest run back to back', () =
   untilCrashed(h)
   h.advance(200)
   assert.equal(h.engine.round.crashPoint, 30)
-  assert.equal(h.engine.round.flyAwayMs, 2000)
+  assert.equal(h.engine.round.flyAwayMs, 0)
   assert.equal(h.engine.schedule.status, 'running')
   const log = h.engine.log.map((line) => line.text).join('\n')
   assert.match(log, new RegExp(`planned ${planned} · launched`))

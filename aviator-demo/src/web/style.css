@@ -79,6 +79,7 @@ h2 { margin: 0 0 8px; font-size: 16px; }
 .schedule-row.done { opacity: .72; }
 .schedule-tick { font-weight: 900; color: var(--gold); }
 .schedule-tag { font-size: 12px; text-transform: uppercase; color: var(--muted); }
+.schedule-flag { color: #ffb020; font-size: 12px; font-weight: 800; }
 .schedule-actions { display: flex; gap: 4px; flex-wrap: wrap; }
 .schedule-actions button { padding: 6px 8px; }
 

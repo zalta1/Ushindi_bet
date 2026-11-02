@@ -10,6 +10,7 @@ const props = defineProps<{
   multiplier: number
   countdownMs: number
   viewerCount: number
+  flightStartedAt?: number | null
 }>()
 
 const emit = defineEmits<{ live: [multiplier: number] }>()
@@ -192,13 +193,19 @@ function frame(now: number) {
   }
 
   if (phase === 'flying') {
-    const serverM = Math.max(1, props.multiplier)
-    if (serverM !== syncedM) {
-      const target = now - secondsFor(serverM) * 1000
-      origin = origin == null ? target : origin + (target - origin) * 0.5
-      syncedM = serverM
+    // One clock for every round: elapsed since the server flight start, then the
+    // shared curve. Later multiplier snapshots are not allowed to yank the plane.
+    let elapsed: number
+    if (props.flightStartedAt != null && props.flightStartedAt > 0) {
+      elapsed = Math.max(0, (Date.now() - props.flightStartedAt) / 1000)
+    } else {
+      if (origin == null) {
+        const serverM = Math.max(1, props.multiplier)
+        origin = now - secondsFor(serverM) * 1000
+        syncedM = serverM
+      }
+      elapsed = Math.max(0, (now - origin) / 1000)
     }
-    const elapsed = origin == null ? 0 : (now - origin) / 1000
     const m = multiplierAt(elapsed)
     const p = place(m, skyW, skyH, planeW, planeH)
     const bob = reduce ? 0 : Math.sin(now / 240) * Math.min(6, skyH * 0.02)

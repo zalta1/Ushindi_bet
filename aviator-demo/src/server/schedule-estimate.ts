@@ -24,17 +24,18 @@ export function secondsFor(mult: number): number {
   return t
 }
 
-/** Natural flight, shortened to the cap when the curve would run longer. */
-export function flightMs(crash: number, capMs: number): number {
-  const natural = Math.max(0, Math.round(secondsFor(Math.max(1, crash)) * 1000))
-  if (natural <= capMs) return natural
-  return Math.round(capMs)
+/** Natural flight time. The cap never shortens this. */
+export function flightMs(crash: number, _capMs = 0): number {
+  return Math.max(0, Math.round(secondsFor(Math.max(1, crash)) * 1000))
 }
 
-export function scheduleFlyAwayMs(crash: number, capMs: number): number {
-  const natural = secondsFor(Math.max(1, crash)) * 1000
-  if (natural <= capMs) return 0
-  return Math.round(capMs)
+/** Set odds always use the natural curve, so this stays 0. */
+export function scheduleFlyAwayMs(_crash: number, _capMs: number): number {
+  return 0
+}
+
+export function exceedsCap(crash: number, capMs: number): boolean {
+  return secondsFor(Math.max(1, crash)) * 1000 > capMs
 }
 
 /** When each odd's betting window opens, starting from startMs. */

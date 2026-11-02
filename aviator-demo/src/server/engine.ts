@@ -10,12 +10,11 @@ import {
   initials,
   multiplierAt,
   payoutOf,
-  secondsFor,
   sha256,
 } from './fairness.js'
-import { SCHEDULE_GAP_MS, SCHEDULE_TAKEOFF_MS, estimateStarts, scheduleFlyAwayMs } from './schedule-estimate.js'
+import { SCHEDULE_GAP_MS, SCHEDULE_TAKEOFF_MS, estimateStarts, exceedsCap, scheduleFlyAwayMs } from './schedule-estimate.js'
 
-export { SCHEDULE_GAP_MS, SCHEDULE_TAKEOFF_MS, estimateStarts, scheduleFlyAwayMs }
+export { SCHEDULE_GAP_MS, SCHEDULE_TAKEOFF_MS, estimateStarts, exceedsCap, scheduleFlyAwayMs }
 
 export const DEMO_CREDIT = 100_000
 export const MIN_STAKE = 100
@@ -488,6 +487,7 @@ export class DemoEngine {
       serverSeed: round.phase === 'crashed' ? round.serverSeed : null,
       crashPoint: round.phase === 'crashed' ? round.crashPoint : null,
       nonce: round.nonce,
+      flightStartedAt: round.phase === 'flying' ? round.flightStartedAt : null,
       history: this.history.map((item) => ({ roundNo: item.roundNo, crashPoint: item.crashPoint })),
       viewerCount: this.players.size,
       limits: { minStake: MIN_STAKE, maxStake: MAX_STAKE, rtpPct: DEMO_RTP_PCT },
@@ -664,25 +664,21 @@ export class DemoEngine {
     }
   }
 
+  /**
+   * Same growth as an automatic round. A time cap never compresses this curve.
+   * The value is held at the round's crash point once the curve reaches it.
+   */
   private multiplierNow(now: number): number {
     const round = this.round
     const started = round.flightStartedAt ?? now
-    const elapsed = Math.max(0, now - started)
-    let m: number
-    if (round.flyAwayMs > 0) {
-      const u = Math.min(1, elapsed / round.flyAwayMs)
-      m = multiplierAt(secondsFor(round.crashPoint) * u)
-    } else {
-      m = multiplierAt(elapsed / 1000)
-    }
+    const elapsed = Math.max(0, now - started) / 1000
+    let m = multiplierAt(elapsed)
     if (m > round.crashPoint) m = round.crashPoint
     return m
   }
 
-  private shouldCrash(now: number, m: number): boolean {
-    const round = this.round
-    if (round.flyAwayMs > 0) return now - (round.flightStartedAt ?? now) >= round.flyAwayMs
-    return m >= round.crashPoint
+  private shouldCrash(_now: number, m: number): boolean {
+    return m >= this.round.crashPoint
   }
 
   private publicMultiplier(now: number): number {
@@ -784,6 +780,7 @@ export class DemoEngine {
       entries: this.schedule.entries.map((entry, index) => ({
         crash: entry.crash,
         at: this.displayStart(entry, index),
+        overCap: exceedsCap(entry.crash, this.schedule.capMs),
         winnerIds: entry.winnerIds,
         winnerNames: entry.winnerIds.map((id) => this.players.get(id)?.name ?? id),
         state: this.entryState(index),

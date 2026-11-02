@@ -2,7 +2,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import Flight from './Flight.vue'
 import { demoApi } from './demo-api'
-import { estimateStarts } from '../server/schedule-estimate'
+import { estimateStarts, exceedsCap } from '../server/schedule-estimate'
 
 interface PlayerRow {
   id: string
@@ -31,13 +31,14 @@ interface ScheduleSnap {
   cursor: number
   total: number
   progress: string
-  entries: { crash: number, at: string | null, winnerIds: string[], winnerNames: string[], state: 'done' | 'current' | 'next' | 'upcoming' }[]
+  entries: { crash: number, at: string | null, overCap: boolean, winnerIds: string[], winnerNames: string[], state: 'done' | 'current' | 'next' | 'upcoming' }[]
 }
 
 interface Snap {
   phase: string
   multiplier: number
   countdownMs: number
+  flightStartedAt: number | null
   roundNo: number
   viewerCount: number
   current: {
@@ -199,6 +200,10 @@ function previewAt(index: number) {
   return clockPlus(startAt.value, offsets[index] ?? 0)
 }
 
+function rowOverCap(crash: number) {
+  return exceedsCap(Number(crash) || 1, Math.round(Number(capSec.value) * 1000))
+}
+
 function removeRow(index: number) {
   rows.value.splice(index, 1)
 }
@@ -333,6 +338,7 @@ async function automatic() {
       :multiplier="snap?.multiplier ?? 1"
       :countdown-ms="snap?.countdownMs ?? 0"
       :viewer-count="snap?.viewerCount ?? 0"
+      :flight-started-at="snap?.flightStartedAt ?? null"
     />
 
     <p class="demo-current" data-testid="demo-current">{{ currentText }}</p>
@@ -359,8 +365,8 @@ async function automatic() {
 
     <section class="card demo-schedule" data-testid="demo-schedule">
       <h2>Odds schedule</h2>
-      <p class="muted" v-if="scheduleMode === 'sequence'">Any number of odds, played back to back inside the time cap. Then play returns to Automatic.</p>
-      <p class="muted" v-else>Paste the odds and one Nairobi start time, then Save. At that time the odds play back to back. If a round is still flying, the first odd starts when it ends and is logged as delayed.</p>
+      <p class="muted" v-if="scheduleMode === 'sequence'">Any number of odds, played back to back on the normal climb. The time cap does not speed the plane. An odd that needs longer is flagged and still flies at that speed.</p>
+      <p class="muted" v-else>Paste the odds and one Nairobi start time, then Save. At that time the odds play back to back on the same curve as Automatic. The cap does not speed them up. If a round is still flying, the first odd starts when it ends and is logged as delayed.</p>
       <p data-testid="demo-nairobi-clock">Nairobi {{ snap?.nairobiNow ?? '—' }}</p>
       <p v-if="snap?.schedule?.countdown" data-testid="demo-schedule-countdown">{{ snap.schedule.countdown }}</p>
       <p data-testid="demo-schedule-progress">{{ snap?.schedule?.progress ?? 'Schedule idle' }}</p>
@@ -385,6 +391,7 @@ async function automatic() {
           <span class="schedule-tick">{{ entry.state === 'done' ? '✓' : (index + 1) }}</span>
           <b>{{ entry.crash.toFixed(2) }}x</b>
           <span v-if="entry.at" data-testid="demo-schedule-estimate">{{ entry.at }}</span>
+          <span v-if="entry.overCap" class="schedule-flag" data-testid="demo-schedule-over-cap">Over cap — normal speed</span>
           <span class="muted">{{ entry.winnerNames.length ? entry.winnerNames.join(', ') : 'no marked winners' }}</span>
           <span class="schedule-tag">{{ entry.state }}</span>
         </div>
@@ -401,6 +408,7 @@ async function automatic() {
           <span>{{ index + 1 }}</span>
           <input type="number" step="0.01" min="1" max="1000" v-model.number="row.crash" data-testid="demo-schedule-odd" />
           <span v-if="previewAt(index)" data-testid="demo-schedule-estimate">{{ previewAt(index) }}</span>
+          <span v-if="rowOverCap(row.crash)" class="schedule-flag" data-testid="demo-schedule-over-cap">Over cap — normal speed</span>
           <span class="muted">{{ row.winnerIds.length ? `${row.winnerIds.length} winner(s)` : 'optional winners' }}</span>
           <span class="schedule-actions">
             <button type="button" data-testid="demo-schedule-up" @click="moveRow(index, -1)">Up</button>

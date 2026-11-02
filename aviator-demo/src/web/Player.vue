@@ -26,6 +26,7 @@ interface Snap {
   serverSeed: string | null
   crashPoint: number | null
   nonce: number
+  flightStartedAt: number | null
   history: { roundNo: number, crashPoint: number }[]
   viewerCount: number
   limits: { minStake: number, maxStake: number, rtpPct: number }
@@ -183,6 +184,7 @@ function preview(panel: number) {
           :multiplier="snap?.multiplier ?? 1"
           :countdown-ms="snap?.countdownMs ?? 0"
           :viewer-count="snap?.viewerCount ?? 0"
+          :flight-started-at="snap?.flightStartedAt ?? null"
           @live="liveMult = $event"
         />
 
