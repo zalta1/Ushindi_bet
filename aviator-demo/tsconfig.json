@@ -9,5 +9,5 @@
     "skipLibCheck": true,
     "types": ["node"]
   },
-  "include": ["src/server/index.ts", "src/server/engine.ts", "src/server/fairness.ts"]
+  "include": ["src/server/index.ts", "src/server/engine.ts", "src/server/fairness.ts", "src/server/schedule-estimate.ts"]
 }

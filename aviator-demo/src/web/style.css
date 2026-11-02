@@ -4,7 +4,7 @@ body { margin: 0; font-family: system-ui, sans-serif; background: var(--bg); col
 a { color: inherit; text-decoration: none; }
 button { background: #172a4d; color: var(--text); border: 1px solid #243f6b; border-radius: 8px; padding: 8px 12px; cursor: pointer; }
 button:disabled { opacity: .55; cursor: not-allowed; }
-input, select { padding: 10px; border-radius: 8px; width: 100%; margin: 6px 0; background: #0b1220; color: var(--text); border: 1px solid #243f6b; }
+input, select, textarea { padding: 10px; border-radius: 8px; width: 100%; margin: 6px 0; background: #0b1220; color: var(--text); border: 1px solid #243f6b; }
 input[type=checkbox] { width: auto; margin: 0; }
 .gold { color: var(--gold); }
 .muted { color: var(--muted); }
