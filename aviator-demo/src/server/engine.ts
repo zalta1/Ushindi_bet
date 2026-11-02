@@ -19,6 +19,9 @@ export const MIN_STAKE = 100
 export const MAX_STAKE = 100_000
 export const DEFAULT_TAKEOFF_MS = 5_000
 export const DEFAULT_CRASHED_MS = 2_500
+export const SCHEDULE_TAKEOFF_MS = 1_500
+export const SCHEDULE_GAP_MS = 1_000
+export const MIN_SCHEDULE_ODDS = 10
 export const BANNER = 'DEMO - no real money'
 
 export const BOTS: { id: string, name: string, balance: number }[] = [
@@ -67,6 +70,8 @@ export interface Round {
   takeoffMs: number
   flyAwayMs: number
   winnerIds: string[]
+  scheduleIndex: number | null
+  scheduleTotal: number
   bettingEndsAt: number
   flightStartedAt: number | null
   crashedAt: number | null
@@ -79,6 +84,20 @@ export interface Plan {
   takeoffMs: number
   flyAwayMs: number
   winnerIds: string[]
+}
+
+export interface ScheduleEntry {
+  crash: number
+  winnerIds: string[]
+}
+
+export type ScheduleStatus = 'idle' | 'running' | 'paused'
+
+/** Fly long enough to hit the odd, but never longer than the cap. */
+export function scheduleFlyAwayMs(crash: number, capMs: number): number {
+  const natural = secondsFor(Math.max(1, crash)) * 1000
+  if (natural <= capMs) return 0
+  return Math.round(capMs)
 }
 
 export interface LogLine {
@@ -126,6 +145,14 @@ export class DemoEngine {
   }
   history: { roundNo: number, crashPoint: number, mode: Mode }[] = []
   log: LogLine[] = []
+  schedule: { status: ScheduleStatus, capMs: number, cursor: number, entries: ScheduleEntry[], finished: boolean } = {
+    status: 'idle',
+    capMs: 3_000,
+    cursor: 0,
+    entries: [],
+    finished: false,
+  }
+  private overrideOnce = false
 
   constructor(options: EngineOptions = {}) {
     this.now = options.now ?? Date.now
@@ -163,11 +190,17 @@ export class DemoEngine {
         round.crashedAt = now
         this.history.unshift({ roundNo: round.roundNo, crashPoint: round.crashPoint, mode: round.mode })
         if (this.history.length > 24) this.history.length = 24
-        this.pushLog('round', `Round ${round.roundNo} flew away at ${round.crashPoint.toFixed(2)}x · ${round.mode} · nonce ${round.nonce} · seed ${round.serverSeed}`)
+        const tag = round.scheduleIndex == null
+          ? round.mode
+          : `schedule ${round.scheduleIndex + 1}/${round.scheduleTotal}`
+        this.pushLog('round', `Round ${round.roundNo} flew away at ${round.crashPoint.toFixed(2)}x · ${tag} · nonce ${round.nonce} · seed ${round.serverSeed}`)
       }
       return
     }
-    if (round.phase === 'crashed' && round.crashedAt != null && now >= round.crashedAt + DEFAULT_CRASHED_MS) {
+    if (round.phase === 'crashed' && round.crashedAt != null) {
+      const gap = this.schedule.status === 'running' ? SCHEDULE_GAP_MS : DEFAULT_CRASHED_MS
+      if (now < round.crashedAt + gap) return
+      if (this.schedule.status === 'paused' && round.scheduleIndex != null && !this.overrideOnce) return
       this.openRound()
     }
   }
@@ -268,6 +301,7 @@ export class DemoEngine {
     }
     this.plan.mode = 'manual'
     if (this.plan.crash == null) this.plan.crash = 2
+    this.overrideOnce = true
     const flyText = this.plan.flyAwayMs === 0 ? 'natural' : `${(this.plan.flyAwayMs / 1000).toFixed(1)}s`
     this.pushLog('round', `Next round queued · manual · crash ${this.plan.crash.toFixed(2)}x · takeoff ${(this.plan.takeoffMs / 1000).toFixed(1)}s · fly away ${flyText}`)
     return this.plan
@@ -279,6 +313,7 @@ export class DemoEngine {
     this.plan.mode = 'manual'
     if (this.plan.crash == null) this.plan.crash = 2
     this.plan.winnerIds = unique
+    this.overrideOnce = true
     const names = unique.map((id) => this.players.get(id)?.name ?? id)
     this.pushLog('round', names.length ? `Next round winners · ${names.join(', ')}` : 'Next round winners cleared')
     return this.plan
@@ -286,6 +321,13 @@ export class DemoEngine {
 
   /** The following round uses the hash. This round is left as it opened. */
   automatic(): Plan {
+    if (this.schedule.status !== 'idle') {
+      this.schedule.status = 'idle'
+      this.schedule.cursor = 0
+      this.schedule.finished = false
+      this.pushLog('round', 'Odds schedule stopped')
+    }
+    this.overrideOnce = false
     this.plan = {
       mode: 'automatic',
       crash: null,
@@ -295,6 +337,47 @@ export class DemoEngine {
     }
     this.pushLog('round', 'Next round returned to automatic')
     return this.plan
+  }
+
+  startSchedule(raw: { capSec?: unknown, entries?: unknown }) {
+    const capSec = Number(raw.capSec)
+    if (!Number.isFinite(capSec) || capSec < 0.5 || capSec > 60) throw httpError(400, 'schedule_cap_invalid')
+    if (!Array.isArray(raw.entries)) throw httpError(400, 'schedule_invalid')
+    if (raw.entries.length < MIN_SCHEDULE_ODDS) throw httpError(400, 'schedule_too_short')
+    const entries: ScheduleEntry[] = raw.entries.map((item) => {
+      const row = item && typeof item === 'object' ? item as Record<string, unknown> : {}
+      const crash = Number(row.crash)
+      if (!Number.isFinite(crash) || crash < 1 || crash > DEMO_MAX_MULTIPLIER) throw httpError(400, 'schedule_odd_invalid')
+      const ids = Array.isArray(row.winnerIds) ? row.winnerIds : []
+      if (ids.some((id) => typeof id !== 'string')) throw httpError(400, 'winners_invalid')
+      return {
+        crash: cents(crash) / 100,
+        winnerIds: [...new Set(ids.filter((id): id is string => this.players.has(id)))].slice(0, 20),
+      }
+    })
+    this.schedule = { status: 'running', capMs: Math.round(capSec * 1000), cursor: 0, entries, finished: false }
+    this.overrideOnce = false
+    const list = entries.map((entry) => `${entry.crash.toFixed(2)}x`).join(', ')
+    this.pushLog('round', `Odds schedule started · ${entries.length} odds · time cap ${capSec.toFixed(1)}s · ${list}`)
+  }
+
+  pauseSchedule() {
+    if (this.schedule.status !== 'running') throw httpError(409, 'schedule_not_running')
+    this.schedule.status = 'paused'
+    const next = Math.min(this.schedule.cursor + 1, this.schedule.entries.length)
+    this.pushLog('round', `Odds schedule paused · next ${next} of ${this.schedule.entries.length}`)
+  }
+
+  resumeSchedule() {
+    if (this.schedule.status !== 'paused') throw httpError(409, 'schedule_not_paused')
+    this.schedule.status = 'running'
+    const next = Math.min(this.schedule.cursor + 1, this.schedule.entries.length)
+    this.pushLog('round', `Odds schedule resumed · next ${next} of ${this.schedule.entries.length}`)
+  }
+
+  stopSchedule() {
+    if (this.schedule.status === 'idle') return
+    this.automatic()
   }
 
   playerView(token?: string | null) {
@@ -348,7 +431,10 @@ export class DemoEngine {
         flyAwayMs: round.flyAwayMs,
         flyLeftMs,
         winnerIds: round.winnerIds,
+        scheduleIndex: round.scheduleIndex,
+        scheduleTotal: round.scheduleTotal,
       },
+      schedule: this.scheduleView(),
       plan: {
         ...this.plan,
         winnerNames: this.plan.winnerIds.map((id) => this.players.get(id)?.name ?? id),
@@ -383,18 +469,50 @@ export class DemoEngine {
     const nonce = this.nonce
     this.nonce += 1
     const serverSeed = this.seed()
-    const mode = this.plan.mode
     const hashInput = crashHash(serverSeed, DEMO_CLIENT_SEED, nonce)
-    let crashPoint = crashPointFromHash(hashInput, DEMO_RTP_PCT, DEMO_MAX_MULTIPLIER)
+    const hashed = crashPointFromHash(hashInput, DEMO_RTP_PCT, DEMO_MAX_MULTIPLIER)
+    let mode: Mode = this.plan.mode
+    let crashPoint = hashed
     let takeoffMs = DEFAULT_TAKEOFF_MS
     let flyAwayMs = 0
     let winnerIds: string[] = []
-    if (mode === 'manual') {
+    let scheduleIndex: number | null = null
+    const scheduleTotal = this.schedule.entries.length
+
+    if (this.overrideOnce) {
+      this.overrideOnce = false
+      if (mode === 'manual') {
+        crashPoint = this.plan.crash ?? 2
+        takeoffMs = this.plan.takeoffMs
+        flyAwayMs = this.plan.flyAwayMs
+        winnerIds = [...this.plan.winnerIds]
+      }
+    } else if (this.schedule.status === 'running') {
+      if (this.schedule.cursor >= this.schedule.entries.length) {
+        this.finishSchedule()
+        mode = 'automatic'
+        crashPoint = hashed
+      } else {
+        const index = this.schedule.cursor
+        const entry = this.schedule.entries[index]
+        this.schedule.cursor += 1
+        scheduleIndex = index
+        mode = 'manual'
+        crashPoint = entry.crash
+        takeoffMs = SCHEDULE_TAKEOFF_MS
+        flyAwayMs = scheduleFlyAwayMs(entry.crash, this.schedule.capMs)
+        winnerIds = [...entry.winnerIds]
+      }
+    } else if (this.schedule.status === 'paused') {
+      mode = 'automatic'
+      crashPoint = hashed
+    } else if (mode === 'manual') {
       crashPoint = this.plan.crash ?? 2
       takeoffMs = this.plan.takeoffMs
       flyAwayMs = this.plan.flyAwayMs
       winnerIds = [...this.plan.winnerIds]
     }
+
     const now = this.now()
     this.round = {
       roundNo: nonce + 1,
@@ -407,12 +525,17 @@ export class DemoEngine {
       takeoffMs,
       flyAwayMs,
       winnerIds,
+      scheduleIndex,
+      scheduleTotal,
       bettingEndsAt: now + takeoffMs,
       flightStartedAt: null,
       crashedAt: null,
       bets: [],
     }
-    this.pushLog('round', `Round ${this.round.roundNo} opened · ${mode} · hash ${this.round.serverSeedHash}`)
+    const label = scheduleIndex == null
+      ? mode
+      : `schedule ${scheduleIndex + 1}/${scheduleTotal} · ${crashPoint.toFixed(2)}x`
+    this.pushLog('round', `Round ${this.round.roundNo} opened · ${label} · hash ${this.round.serverSeedHash}`)
     this.armBots()
   }
 
@@ -509,6 +632,60 @@ export class DemoEngine {
 
   private pushLog(kind: LogLine['kind'], text: string) {
     this.log.unshift({ id: this.logSeq++, at: this.now(), kind, text })
-    if (this.log.length > 80) this.log.length = 80
+    if (this.log.length > 400) this.log.length = 400
+  }
+
+  private finishSchedule() {
+    this.schedule.status = 'idle'
+    this.schedule.finished = true
+    this.overrideOnce = false
+    this.plan = {
+      mode: 'automatic',
+      crash: null,
+      takeoffMs: DEFAULT_TAKEOFF_MS,
+      flyAwayMs: 0,
+      winnerIds: [],
+    }
+    this.pushLog('round', 'Odds schedule finished')
+    this.pushLog('round', 'Next round returned to automatic')
+  }
+
+  private scheduleView() {
+    const total = this.schedule.entries.length
+    const active = this.round.scheduleIndex
+    const cursor = this.schedule.cursor
+    let progress = 'Schedule idle'
+    if (this.schedule.finished) progress = 'Schedule finished · automatic'
+    else if (this.schedule.status === 'running' && active != null && this.round.phase !== 'crashed') {
+      progress = `Schedule round ${active + 1} of ${total}`
+    } else if (this.schedule.status === 'running' && cursor < total) {
+      progress = `Schedule round ${cursor + 1} of ${total} next`
+    } else if (this.schedule.status === 'paused') {
+      progress = `Schedule paused · next ${Math.min(cursor + 1, Math.max(total, 1))} of ${total}`
+    }
+    return {
+      status: this.schedule.status,
+      finished: this.schedule.finished,
+      capSec: this.schedule.capMs / 1000,
+      cursor,
+      total,
+      progress,
+      entries: this.schedule.entries.map((entry, index) => ({
+        crash: entry.crash,
+        winnerIds: entry.winnerIds,
+        winnerNames: entry.winnerIds.map((id) => this.players.get(id)?.name ?? id),
+        state: this.entryState(index),
+      })),
+    }
+  }
+
+  private entryState(index: number): 'done' | 'current' | 'next' | 'upcoming' {
+    if (this.schedule.finished) return 'done'
+    if (this.schedule.status === 'idle') return 'upcoming'
+    const active = this.round.scheduleIndex
+    if (active != null && index === active && this.round.phase !== 'crashed') return 'current'
+    if (index < this.schedule.cursor) return 'done'
+    if (index === this.schedule.cursor) return 'next'
+    return 'upcoming'
   }
 }

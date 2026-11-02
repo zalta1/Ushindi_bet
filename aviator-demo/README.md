@@ -20,6 +20,8 @@ Open http://127.0.0.1:5180 for the player screen and http://127.0.0.1:5180/admin
 
 Automatic rounds use the same bustabit-style SHA-256 crash as the real Aviator game (client seed `demo`, RTP 96, cap 1000). The hash is published when the round opens. The seed is shown after the plane flies away.
 
+The presenter can also run an odds schedule: at least 10 crash odds, reordered in the list, and a time cap. Each flight is sped up so it reaches its odd within that cap. Pause holds the list after the current round. Stop, or the end of the list, returns the following round to Automatic. A row can optionally mark the players selected in the table.
+
 Presenter controls apply to the **next** round only:
 
 - crash multiplier (1.10–100)

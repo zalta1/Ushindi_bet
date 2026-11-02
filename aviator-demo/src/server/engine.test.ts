@@ -243,6 +243,98 @@ test('http demo does not reveal the seed and does not use the real session cooki
   await app.close()
 })
 
+function tenOdds(crash = 1.2, capSec = 8) {
+  return {
+    capSec,
+    entries: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => ({ crash: Math.round((crash + i * 0.1) * 100) / 100, winnerIds: [] as string[] })),
+  }
+}
+
+test('odds schedule plays each odd in order, then returns to automatic', () => {
+  const h = harness({ seeds: ['sched-a', 'sched-b', 'sched-c', 'sched-d'] })
+  const before = h.engine.round.crashPoint
+  const plan = tenOdds(1.2, 8)
+  assert.throws(() => h.engine.startSchedule({ capSec: 3, entries: plan.entries.slice(0, 9) }), /schedule_too_short/)
+  assert.throws(() => h.engine.startSchedule({ capSec: 3, entries: plan.entries.map((entry, i) => i === 3 ? { crash: 0.4, winnerIds: [] } : entry) }), /schedule_odd_invalid/)
+  assert.throws(() => h.engine.startSchedule({ capSec: 0.1, entries: plan.entries }), /schedule_cap_invalid/)
+  h.engine.startSchedule(plan)
+  assert.equal(h.engine.round.crashPoint, before)
+  assert.equal(h.engine.round.mode, 'automatic')
+  const seen: number[] = []
+  for (let i = 0; i < 10; i += 1) {
+    nextRound(h)
+    seen.push(h.engine.round.crashPoint)
+    assert.equal(h.engine.adminView().schedule.progress, `Schedule round ${i + 1} of 10`)
+  }
+  assert.deepEqual(seen, plan.entries.map((entry) => entry.crash))
+  const texts = () => h.engine.log.map((line) => line.text).join('\n')
+  assert.match(texts(), /Round \d+ opened · schedule 1\/10 · 1\.20x/)
+  assert.match(texts(), /Round \d+ opened · schedule 10\/10 · 2\.10x/)
+  nextRound(h)
+  assert.equal(h.engine.round.mode, 'automatic')
+  assert.equal(h.engine.schedule.status, 'idle')
+  assert.equal(h.engine.round.crashPoint, expectedCrash(h.engine.round.serverSeed, h.engine.round.nonce))
+  assert.match(texts(), /Odds schedule finished/)
+  assert.match(texts(), /Next round returned to automatic/)
+})
+
+test('time cap shortens a long flight and leaves a short odd on the natural curve', () => {
+  const h = harness()
+  const entries = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => ({ crash: i === 0 ? 30 : 1.05, winnerIds: [] as string[] }))
+  h.engine.startSchedule({ capSec: 2, entries })
+  nextRound(h)
+  assert.equal(h.engine.round.crashPoint, 30)
+  assert.equal(h.engine.round.flyAwayMs, 2000)
+  untilCrashed(h)
+  const flight = (h.engine.round.crashedAt ?? 0) - (h.engine.round.flightStartedAt ?? 0)
+  assert.ok(flight >= 2000 && flight <= 2100)
+  nextRound(h)
+  assert.equal(h.engine.round.crashPoint, 1.05)
+  assert.equal(h.engine.round.flyAwayMs, 0)
+})
+
+test('a schedule row can mark winners, and pause holds the next odd', () => {
+  const h = harness()
+  const entries = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => ({
+    crash: 2,
+    winnerIds: i === 0 ? ['bot-amina'] : [],
+  }))
+  h.engine.startSchedule({ capSec: 3, entries })
+  nextRound(h)
+  h.engine.placeBet('bot-amina', 1000, 5, 1)
+  untilCrashed(h)
+  const amina = h.engine.round.bets.find((bet) => bet.playerId === 'bot-amina')!
+  assert.equal(amina.status, 'cashed')
+  assert.equal(amina.cashoutAt, 1.99)
+  assert.ok(amina.cashoutAt < h.engine.round.crashPoint)
+  h.engine.pauseSchedule()
+  h.advance(5000)
+  assert.equal(h.engine.round.phase, 'crashed')
+  assert.equal(h.engine.schedule.cursor, 1)
+  h.engine.resumeSchedule()
+  nextRound(h)
+  assert.equal(h.engine.round.crashPoint, 2)
+  assert.equal(h.engine.round.scheduleIndex, 1)
+  h.engine.stopSchedule()
+  nextRound(h)
+  assert.equal(h.engine.round.mode, 'automatic')
+  assert.equal(h.engine.round.crashPoint, expectedCrash(h.engine.round.serverSeed, h.engine.round.nonce))
+  assert.match(h.engine.log.map((line) => line.text).join('\n'), /Odds schedule stopped/)
+})
+
+test('a single next-round plan still wins once while a schedule is running', () => {
+  const h = harness()
+  h.engine.startSchedule(tenOdds())
+  h.engine.setNext({ crash: 9, takeoffMs: 1000, flyAwayMs: 1000 })
+  nextRound(h)
+  assert.equal(h.engine.round.crashPoint, 9)
+  assert.equal(h.engine.round.scheduleIndex, null)
+  assert.equal(h.engine.schedule.cursor, 0)
+  nextRound(h)
+  assert.equal(h.engine.round.crashPoint, 1.2)
+  assert.equal(h.engine.round.scheduleIndex, 0)
+})
+
 test('demo sources do not import the real app', () => {
   const root = fileURLToPath(new URL('../..', import.meta.url))
   const banned = ['ushindi_sid', 'DATABASE_URL', '@ushindi', 'apps/api', 'apps/web', "from 'pg'", 'from "pg"', 'postgres://', 'createPool']

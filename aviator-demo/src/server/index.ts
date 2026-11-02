@@ -109,6 +109,43 @@ export async function createApp(engine: DemoEngine = new DemoEngine()) {
     }
   })
 
+  app.post('/api/admin/schedule/start', async (req, reply) => {
+    try {
+      const body = readBody(req.body)
+      engine.startSchedule({ capSec: body.capSec, entries: body.entries })
+      return engine.adminView()
+    } catch (err) {
+      return sendError(reply, err)
+    }
+  })
+
+  app.post('/api/admin/schedule/pause', async (_req, reply) => {
+    try {
+      engine.pauseSchedule()
+      return engine.adminView()
+    } catch (err) {
+      return sendError(reply, err)
+    }
+  })
+
+  app.post('/api/admin/schedule/resume', async (_req, reply) => {
+    try {
+      engine.resumeSchedule()
+      return engine.adminView()
+    } catch (err) {
+      return sendError(reply, err)
+    }
+  })
+
+  app.post('/api/admin/schedule/stop', async (_req, reply) => {
+    try {
+      engine.stopSchedule()
+      return engine.adminView()
+    } catch (err) {
+      return sendError(reply, err)
+    }
+  })
+
   const stream = (write: (req: FastifyRequest) => unknown) => (req: FastifyRequest, reply: FastifyReply) => {
     reply.hijack()
     const res = reply.raw
