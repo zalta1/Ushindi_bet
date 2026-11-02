@@ -22,12 +22,14 @@ interface PlayerRow {
 
 interface ScheduleSnap {
   status: 'idle' | 'running' | 'paused'
+  mode: 'sequence' | 'timed'
   finished: boolean
+  countdown: string
   capSec: number
   cursor: number
   total: number
   progress: string
-  entries: { crash: number, winnerIds: string[], winnerNames: string[], state: 'done' | 'current' | 'next' | 'upcoming' }[]
+  entries: { crash: number, at: string | null, winnerIds: string[], winnerNames: string[], state: 'done' | 'current' | 'next' | 'upcoming' }[]
 }
 
 interface Snap {
@@ -59,6 +61,7 @@ interface Snap {
   players: PlayerRow[]
   log: { id: number, at: number, kind: string, text: string }[]
   schedule: ScheduleSnap
+  nairobiNow: string
 }
 
 const snap = ref<Snap | null>(null)
@@ -71,8 +74,9 @@ const selected = ref<string[]>([])
 const busy = ref(false)
 const DEFAULT_ODDS = [1.2, 3.5, 2.1, 1.5, 5, 1.8, 2.4, 8, 1.15, 4.2]
 let rowKey = 1
-const rows = ref(DEFAULT_ODDS.map((crash) => ({ key: rowKey++, crash, winnerIds: [] as string[] })))
+const rows = ref(DEFAULT_ODDS.map((crash) => ({ key: rowKey++, crash, at: '', winnerIds: [] as string[] })))
 const capSec = ref(3)
+const scheduleMode = ref<'sequence' | 'timed'>('sequence')
 let source: EventSource | null = null
 let poll: ReturnType<typeof setInterval> | undefined
 
@@ -151,8 +155,11 @@ function explain(err: unknown) {
     takeoff_out_of_range: 'Takeoff must be from 1 to 30 seconds.',
     flyaway_out_of_range: 'Fly away must be 0 (natural) or from 0.5 to 60 seconds.',
     winners_invalid: 'Pick players from the list.',
-    schedule_too_short: 'Enter at least 10 odds.',
+    schedule_too_short: 'Back to back needs 10 odds. Timed needs at least one.',
     schedule_odd_invalid: 'Each odd must be from 1.00 to 1000.',
+    schedule_time_invalid: 'Each timed odd needs a Nairobi time, HH:MM:SS.',
+    schedule_time_past: 'Times must still be ahead on the Nairobi clock.',
+    schedule_time_duplicate: 'Two odds cannot share the same time.',
     schedule_cap_invalid: 'Time cap must be from 0.5 to 60 seconds.',
     schedule_not_running: 'Start the schedule first.',
     schedule_not_paused: 'The schedule is not paused.',
@@ -161,7 +168,17 @@ function explain(err: unknown) {
 }
 
 function addRow() {
-  rows.value.push({ key: rowKey++, crash: 2, winnerIds: [] })
+  rows.value.push({ key: rowKey++, crash: 2, at: '', winnerIds: [] })
+}
+
+function sortTimed() {
+  if (scheduleMode.value !== 'timed') return
+  rows.value = [...rows.value].sort((a, b) => {
+    if (!a.at && !b.at) return 0
+    if (!a.at) return 1
+    if (!b.at) return -1
+    return a.at.localeCompare(b.at)
+  })
 }
 
 function removeRow(index: number) {
@@ -187,8 +204,9 @@ async function startSchedule() {
   busy.value = true
   try {
     applySnap(await demoApi<Snap>('/api/admin/schedule/start', {
+      mode: scheduleMode.value,
       capSec: capSec.value,
-      entries: rows.value.map((row) => ({ crash: row.crash, winnerIds: row.winnerIds })),
+      entries: rows.value.map((row) => ({ crash: row.crash, at: row.at, winnerIds: row.winnerIds })),
     }))
     saved.value = 'Schedule queued. It starts on the next round.'
   } catch (err) {
@@ -320,8 +338,15 @@ async function automatic() {
 
     <section class="card demo-schedule" data-testid="demo-schedule">
       <h2>Odds schedule</h2>
-      <p class="muted">At least 10 odds, each 1.00 or higher. The climb is sped up so every flight finishes within the time cap. The list then returns to Automatic.</p>
+      <p class="muted" v-if="scheduleMode === 'sequence'">Back to back needs at least 10 odds and runs them in order. The climb stays inside the time cap, then play returns to Automatic.</p>
+      <p class="muted" v-else>Timed odds use the Nairobi clock. Fewer than 10 is fine. Between times the demo plays Automatic rounds, or waits if the next odd is soon. If a round is still flying, the odd starts as soon as it ends and is logged as delayed.</p>
+      <p data-testid="demo-nairobi-clock">Nairobi {{ snap?.nairobiNow ?? '—' }}</p>
+      <p v-if="snap?.schedule?.countdown" data-testid="demo-schedule-countdown">{{ snap.schedule.countdown }}</p>
       <p data-testid="demo-schedule-progress">{{ snap?.schedule?.progress ?? 'Schedule idle' }}</p>
+      <div class="demo-actions" v-if="snap?.schedule?.status !== 'running' && snap?.schedule?.status !== 'paused'">
+        <button type="button" :class="{ active: scheduleMode === 'sequence' }" data-testid="demo-schedule-mode-sequence" @click="scheduleMode = 'sequence'">Back to back</button>
+        <button type="button" :class="{ active: scheduleMode === 'timed' }" data-testid="demo-schedule-mode-timed" @click="scheduleMode = 'timed'">Timed</button>
+      </div>
       <label>Time cap (seconds)
         <input type="number" step="0.5" min="0.5" max="60" v-model.number="capSec" data-testid="demo-schedule-cap" :disabled="snap?.schedule?.status === 'running'" />
       </label>
@@ -338,6 +363,7 @@ async function automatic() {
         >
           <span class="schedule-tick">{{ entry.state === 'done' ? '✓' : (index + 1) }}</span>
           <b>{{ entry.crash.toFixed(2) }}x</b>
+          <span v-if="entry.at">{{ entry.at }}</span>
           <span class="muted">{{ entry.winnerNames.length ? entry.winnerNames.join(', ') : 'no marked winners' }}</span>
           <span class="schedule-tag">{{ entry.state }}</span>
         </div>
@@ -346,6 +372,7 @@ async function automatic() {
         <div v-for="(row, index) in rows" :key="row.key" class="schedule-row" data-testid="demo-schedule-edit">
           <span>{{ index + 1 }}</span>
           <input type="number" step="0.01" min="1" max="1000" v-model.number="row.crash" data-testid="demo-schedule-odd" />
+          <input v-if="scheduleMode === 'timed'" type="time" step="1" v-model="row.at" data-testid="demo-schedule-time" @change="sortTimed" />
           <span class="muted">{{ row.winnerIds.length ? `${row.winnerIds.length} winner(s)` : 'optional winners' }}</span>
           <span class="schedule-actions">
             <button type="button" data-testid="demo-schedule-up" @click="moveRow(index, -1)">Up</button>

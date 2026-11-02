@@ -22,6 +22,9 @@ export const DEFAULT_CRASHED_MS = 2_500
 export const SCHEDULE_TAKEOFF_MS = 1_500
 export const SCHEDULE_GAP_MS = 1_000
 export const MIN_SCHEDULE_ODDS = 10
+export const IMMINENT_MS = 12_000
+export const ON_TIME_MS = 1_500
+export const NAIROBI_ZONE = 'Africa/Nairobi'
 export const BANNER = 'DEMO - no real money'
 
 export const BOTS: { id: string, name: string, balance: number }[] = [
@@ -89,15 +92,59 @@ export interface Plan {
 export interface ScheduleEntry {
   crash: number
   winnerIds: string[]
+  atMs: number | null
 }
 
 export type ScheduleStatus = 'idle' | 'running' | 'paused'
+export type ScheduleMode = 'sequence' | 'timed'
 
 /** Fly long enough to hit the odd, but never longer than the cap. */
 export function scheduleFlyAwayMs(crash: number, capMs: number): number {
   const natural = secondsFor(Math.max(1, crash)) * 1000
   if (natural <= capMs) return 0
   return Math.round(capMs)
+}
+
+export function nairobiClock(ms: number): string {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: NAIROBI_ZONE,
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date(ms))
+  const pick = (type: string) => parts.find((part) => part.type === type)?.value ?? '00'
+  return `${pick('hour')}:${pick('minute')}:${pick('second')}`
+}
+
+export function nairobiDate(ms: number): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: NAIROBI_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date(ms))
+}
+
+/** Interpret HH:MM:SS as Africa/Nairobi wall time on the Nairobi calendar day of nowMs. */
+export function nairobiEpoch(hms: string, nowMs: number): number | null {
+  const match = /^(\d{2}):(\d{2})(?::(\d{2}))?$/.exec(hms.trim())
+  if (!match) return null
+  const hh = Number(match[1])
+  const mm = Number(match[2])
+  const ss = Number(match[3] ?? '0')
+  if (hh > 23 || mm > 59 || ss > 59) return null
+  const clock = [hh, mm, ss].map((part) => String(part).padStart(2, '0')).join(':')
+  const at = Date.parse(`${nairobiDate(nowMs)}T${clock}+03:00`)
+  return Number.isFinite(at) ? at : null
+}
+
+function formatSpan(ms: number): string {
+  const total = Math.max(0, Math.ceil(ms / 1000))
+  const hh = Math.floor(total / 3600)
+  const mm = Math.floor((total % 3600) / 60)
+  const ss = total % 60
+  return [hh, mm, ss].map((part) => String(part).padStart(2, '0')).join(':')
 }
 
 export interface LogLine {
@@ -145,12 +192,22 @@ export class DemoEngine {
   }
   history: { roundNo: number, crashPoint: number, mode: Mode }[] = []
   log: LogLine[] = []
-  schedule: { status: ScheduleStatus, capMs: number, cursor: number, entries: ScheduleEntry[], finished: boolean } = {
+  schedule: {
+    status: ScheduleStatus
+    mode: ScheduleMode
+    capMs: number
+    cursor: number
+    entries: ScheduleEntry[]
+    finished: boolean
+    dueIndex: number | null
+  } = {
     status: 'idle',
+    mode: 'sequence',
     capMs: 3_000,
     cursor: 0,
     entries: [],
     finished: false,
+    dueIndex: null,
   }
   private overrideOnce = false
 
@@ -164,6 +221,7 @@ export class DemoEngine {
   }
 
   tick(): void {
+    this.markTimedDue()
     const now = this.now()
     const round = this.round
     if (round.phase === 'betting') {
@@ -198,9 +256,14 @@ export class DemoEngine {
       return
     }
     if (round.phase === 'crashed' && round.crashedAt != null) {
+      if (this.timedDueNow()) {
+        if (!(this.schedule.status === 'paused' && !this.overrideOnce)) this.openRound()
+        return
+      }
       const gap = this.schedule.status === 'running' ? SCHEDULE_GAP_MS : DEFAULT_CRASHED_MS
       if (now < round.crashedAt + gap) return
       if (this.schedule.status === 'paused' && round.scheduleIndex != null && !this.overrideOnce) return
+      if (this.idleForNextTimed(now)) return
       this.openRound()
     }
   }
@@ -325,6 +388,8 @@ export class DemoEngine {
       this.schedule.status = 'idle'
       this.schedule.cursor = 0
       this.schedule.finished = false
+      this.schedule.dueIndex = null
+      this.schedule.mode = 'sequence'
       this.pushLog('round', 'Odds schedule stopped')
     }
     this.overrideOnce = false
@@ -339,26 +404,48 @@ export class DemoEngine {
     return this.plan
   }
 
-  startSchedule(raw: { capSec?: unknown, entries?: unknown }) {
+  startSchedule(raw: { capSec?: unknown, entries?: unknown, mode?: unknown }) {
     const capSec = Number(raw.capSec)
     if (!Number.isFinite(capSec) || capSec < 0.5 || capSec > 60) throw httpError(400, 'schedule_cap_invalid')
     if (!Array.isArray(raw.entries)) throw httpError(400, 'schedule_invalid')
-    if (raw.entries.length < MIN_SCHEDULE_ODDS) throw httpError(400, 'schedule_too_short')
+    const mode: ScheduleMode = raw.mode === 'timed' ? 'timed' : 'sequence'
+    if (mode === 'sequence' && raw.entries.length < MIN_SCHEDULE_ODDS) throw httpError(400, 'schedule_too_short')
+    if (mode === 'timed' && raw.entries.length < 1) throw httpError(400, 'schedule_too_short')
+    const now = this.now()
     const entries: ScheduleEntry[] = raw.entries.map((item) => {
       const row = item && typeof item === 'object' ? item as Record<string, unknown> : {}
       const crash = Number(row.crash)
       if (!Number.isFinite(crash) || crash < 1 || crash > DEMO_MAX_MULTIPLIER) throw httpError(400, 'schedule_odd_invalid')
       const ids = Array.isArray(row.winnerIds) ? row.winnerIds : []
       if (ids.some((id) => typeof id !== 'string')) throw httpError(400, 'winners_invalid')
+      let atMs: number | null = null
+      if (mode === 'timed') {
+        const at = nairobiEpoch(String(row.at ?? ''), now)
+        if (at == null) throw httpError(400, 'schedule_time_invalid')
+        if (at < now) throw httpError(400, 'schedule_time_past')
+        atMs = at
+      }
       return {
         crash: cents(crash) / 100,
         winnerIds: [...new Set(ids.filter((id): id is string => this.players.has(id)))].slice(0, 20),
+        atMs,
       }
     })
-    this.schedule = { status: 'running', capMs: Math.round(capSec * 1000), cursor: 0, entries, finished: false }
+    if (mode === 'timed') {
+      const seen = new Set<number>()
+      for (const entry of entries) {
+        const at = entry.atMs ?? 0
+        if (seen.has(at)) throw httpError(400, 'schedule_time_duplicate')
+        seen.add(at)
+      }
+      entries.sort((a, b) => (a.atMs ?? 0) - (b.atMs ?? 0))
+    }
+    this.schedule = { status: 'running', mode, capMs: Math.round(capSec * 1000), cursor: 0, entries, finished: false, dueIndex: null }
     this.overrideOnce = false
-    const list = entries.map((entry) => `${entry.crash.toFixed(2)}x`).join(', ')
-    this.pushLog('round', `Odds schedule started · ${entries.length} odds · time cap ${capSec.toFixed(1)}s · ${list}`)
+    const list = entries.map((entry) => (
+      entry.atMs == null ? `${entry.crash.toFixed(2)}x` : `${entry.crash.toFixed(2)}x at ${nairobiClock(entry.atMs)}`
+    )).join(', ')
+    this.pushLog('round', `Odds schedule started · ${mode} · ${entries.length} odds · time cap ${capSec.toFixed(1)}s · ${list}`)
   }
 
   pauseSchedule() {
@@ -462,6 +549,7 @@ export class DemoEngine {
         }
       }),
       log: this.log,
+      nairobiNow: nairobiClock(now),
     }
   }
 
@@ -477,6 +565,7 @@ export class DemoEngine {
     let flyAwayMs = 0
     let winnerIds: string[] = []
     let scheduleIndex: number | null = null
+    let launchNote = ''
     const scheduleTotal = this.schedule.entries.length
 
     if (this.overrideOnce) {
@@ -488,20 +577,31 @@ export class DemoEngine {
         winnerIds = [...this.plan.winnerIds]
       }
     } else if (this.schedule.status === 'running') {
+      const due = this.schedule.mode === 'sequence' || this.timedDueNow()
       if (this.schedule.cursor >= this.schedule.entries.length) {
         this.finishSchedule()
+        mode = 'automatic'
+        crashPoint = hashed
+      } else if (!due) {
         mode = 'automatic'
         crashPoint = hashed
       } else {
         const index = this.schedule.cursor
         const entry = this.schedule.entries[index]
         this.schedule.cursor += 1
+        if (this.schedule.dueIndex === index) this.schedule.dueIndex = null
         scheduleIndex = index
         mode = 'manual'
         crashPoint = entry.crash
         takeoffMs = SCHEDULE_TAKEOFF_MS
         flyAwayMs = scheduleFlyAwayMs(entry.crash, this.schedule.capMs)
         winnerIds = [...entry.winnerIds]
+        if (entry.atMs != null) {
+          const planned = nairobiClock(entry.atMs)
+          const launched = nairobiClock(this.now())
+          const delayed = this.now() > entry.atMs + ON_TIME_MS
+          launchNote = ` · planned ${planned} · launched ${launched}${delayed ? ' · delayed' : ''}`
+        }
       }
     } else if (this.schedule.status === 'paused') {
       mode = 'automatic'
@@ -534,7 +634,7 @@ export class DemoEngine {
     }
     const label = scheduleIndex == null
       ? mode
-      : `schedule ${scheduleIndex + 1}/${scheduleTotal} · ${crashPoint.toFixed(2)}x`
+      : `schedule ${scheduleIndex + 1}/${scheduleTotal} · ${crashPoint.toFixed(2)}x${launchNote}`
     this.pushLog('round', `Round ${this.round.roundNo} opened · ${label} · hash ${this.round.serverSeedHash}`)
     this.armBots()
   }
@@ -651,9 +751,12 @@ export class DemoEngine {
   }
 
   private scheduleView() {
+    const now = this.now()
     const total = this.schedule.entries.length
     const active = this.round.scheduleIndex
     const cursor = this.schedule.cursor
+    const nextEntry = this.schedule.entries[cursor]
+    const countdown = this.countdownText(now, nextEntry)
     let progress = 'Schedule idle'
     if (this.schedule.finished) progress = 'Schedule finished · automatic'
     else if (this.schedule.status === 'running' && active != null && this.round.phase !== 'crashed') {
@@ -665,18 +768,49 @@ export class DemoEngine {
     }
     return {
       status: this.schedule.status,
+      mode: this.schedule.mode,
       finished: this.schedule.finished,
+      countdown,
       capSec: this.schedule.capMs / 1000,
       cursor,
       total,
       progress,
       entries: this.schedule.entries.map((entry, index) => ({
         crash: entry.crash,
+        at: entry.atMs == null ? null : nairobiClock(entry.atMs),
         winnerIds: entry.winnerIds,
         winnerNames: entry.winnerIds.map((id) => this.players.get(id)?.name ?? id),
         state: this.entryState(index),
       })),
     }
+  }
+
+  private markTimedDue() {
+    if (this.schedule.status !== 'running' || this.schedule.mode !== 'timed') return
+    const entry = this.schedule.entries[this.schedule.cursor]
+    if (entry?.atMs != null && this.now() >= entry.atMs) this.schedule.dueIndex = this.schedule.cursor
+  }
+
+  private timedDueNow(): boolean {
+    if (this.schedule.status !== 'running' || this.schedule.mode !== 'timed' || this.overrideOnce) return false
+    return this.schedule.dueIndex === this.schedule.cursor && this.schedule.cursor < this.schedule.entries.length
+  }
+
+  /** Don't start an automatic round that would still be flying when the next odd is due. */
+  private idleForNextTimed(now: number): boolean {
+    if (this.schedule.status !== 'running' || this.schedule.mode !== 'timed' || this.overrideOnce) return false
+    const entry = this.schedule.entries[this.schedule.cursor]
+    if (entry?.atMs == null) return false
+    const wait = entry.atMs - now
+    return wait > 0 && wait <= IMMINENT_MS
+  }
+
+  private countdownText(now: number, entry: ScheduleEntry | undefined): string {
+    if (this.schedule.status !== 'running' || this.schedule.mode !== 'timed' || entry?.atMs == null) return ''
+    const clock = nairobiClock(entry.atMs)
+    const wait = entry.atMs - now
+    if (wait > 0) return `Next ${entry.crash.toFixed(2)}x at ${clock} in ${formatSpan(wait)}`
+    return `Next ${entry.crash.toFixed(2)}x at ${clock} · waiting for this round`
   }
 
   private entryState(index: number): 'done' | 'current' | 'next' | 'upcoming' {

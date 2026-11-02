@@ -3,7 +3,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs'
 import path from 'node:path'
 import { test } from 'node:test'
 import { fileURLToPath } from 'node:url'
-import { DemoEngine } from './engine.ts'
+import { DemoEngine, nairobiClock } from './engine.ts'
 import { DEMO_CLIENT_SEED, DEMO_MAX_MULTIPLIER, DEMO_RTP_PCT, crashHash, crashPointFromHash, sha256 } from './fairness.ts'
 import { createApp } from './index.ts'
 
@@ -333,6 +333,130 @@ test('a single next-round plan still wins once while a schedule is running', () 
   nextRound(h)
   assert.equal(h.engine.round.crashPoint, 1.2)
   assert.equal(h.engine.round.scheduleIndex, 0)
+})
+
+function clockHarness(start = Date.parse('2026-11-02T17:00:00.000Z')) {
+  let clock = start
+  let i = 0
+  const engine = new DemoEngine({
+    now: () => clock,
+    random: () => 0.99,
+    seed: () => {
+      const value = `seed-${i}`
+      i += 1
+      return value
+    },
+    bots: false,
+  })
+  return {
+    engine,
+    get clock() { return clock },
+    advance(ms: number, step = 50) {
+      const end = clock + ms
+      while (clock < end) {
+        clock = Math.min(end, clock + step)
+        engine.tick()
+      }
+    },
+  }
+}
+
+test('timed odds sort, reject past and duplicate times, and allow fewer than 10', () => {
+  const h = clockHarness()
+  const soon = nairobiClock(h.clock + 20_000)
+  const later = nairobiClock(h.clock + 40_000)
+  const past = nairobiClock(h.clock - 5_000)
+  assert.throws(() => h.engine.startSchedule({
+    mode: 'sequence',
+    capSec: 2,
+    entries: [{ crash: 2, winnerIds: [] }, { crash: 3, winnerIds: [] }, { crash: 4, winnerIds: [] }],
+  }), /schedule_too_short/)
+  assert.throws(() => h.engine.startSchedule({
+    mode: 'timed',
+    capSec: 2,
+    entries: [{ crash: 2, at: past, winnerIds: [] }],
+  }), /schedule_time_past/)
+  assert.throws(() => h.engine.startSchedule({
+    mode: 'timed',
+    capSec: 2,
+    entries: [{ crash: 2, at: soon, winnerIds: [] }, { crash: 3, at: soon, winnerIds: [] }],
+  }), /schedule_time_duplicate/)
+  h.engine.startSchedule({
+    mode: 'timed',
+    capSec: 2,
+    entries: [
+      { crash: 5.5, at: later, winnerIds: [] },
+      { crash: 2, at: soon, winnerIds: [] },
+      { crash: 1.4, at: nairobiClock(h.clock + 60_000), winnerIds: [] },
+    ],
+  })
+  assert.deepEqual(h.engine.schedule.entries.map((entry) => entry.crash), [2, 5.5, 1.4])
+  assert.equal(h.engine.round.mode, 'automatic')
+  assert.match(h.engine.adminView().schedule.countdown, /Next 2\.00x at/)
+})
+
+test('a timed odd waits out a flying round, then launches late and the last odd returns to automatic', () => {
+  const h = clockHarness()
+  h.engine.setNext({ crash: 4, takeoffMs: 1000, flyAwayMs: 6000 })
+  nextRound(h)
+  const plannedMs = h.clock + 2_000
+  const planned = nairobiClock(plannedMs)
+  h.engine.startSchedule({
+    mode: 'timed',
+    capSec: 2,
+    entries: [{ crash: 30, at: planned, winnerIds: [] }],
+  })
+  h.advance(1_000)
+  assert.equal(h.engine.round.phase, 'flying')
+  h.advance(2_500)
+  assert.equal(h.engine.round.phase, 'flying')
+  assert.equal(h.engine.round.crashPoint, 4)
+  assert.equal(h.engine.schedule.cursor, 0)
+  untilCrashed(h)
+  h.advance(200)
+  assert.equal(h.engine.round.crashPoint, 30)
+  assert.equal(h.engine.round.flyAwayMs, 2000)
+  const log = h.engine.log.map((line) => line.text).join('\n')
+  assert.match(log, new RegExp(`planned ${planned} · launched`))
+  assert.match(log, /delayed/)
+  nextRound(h)
+  assert.equal(h.engine.round.mode, 'automatic')
+  assert.equal(h.engine.round.crashPoint, expectedCrash(h.engine.round.serverSeed, h.engine.round.nonce))
+  assert.match(h.engine.log.map((line) => line.text).join('\n'), /Odds schedule finished/)
+  assert.match(h.engine.log.map((line) => line.text).join('\n'), /Next round returned to automatic/)
+})
+
+test('a timed gap longer than the idle window keeps automatic rounds', () => {
+  const h = clockHarness()
+  h.engine.startSchedule({
+    mode: 'timed',
+    capSec: 2,
+    entries: [{ crash: 2, at: nairobiClock(h.clock + 10 * 60_000), winnerIds: [] }],
+  })
+  nextRound(h)
+  assert.equal(h.engine.round.mode, 'automatic')
+  assert.equal(h.engine.round.scheduleIndex, null)
+  assert.equal(h.engine.schedule.cursor, 0)
+})
+
+test('an imminent timed odd idles, then launches on its clock', () => {
+  const h = clockHarness()
+  untilCrashed(h)
+  const plannedMs = h.clock + 4_000
+  const planned = nairobiClock(plannedMs)
+  h.engine.startSchedule({
+    mode: 'timed',
+    capSec: 2,
+    entries: [{ crash: 2, at: planned, winnerIds: [] }],
+  })
+  h.advance(1_500)
+  assert.equal(h.engine.round.phase, 'crashed')
+  h.advance(3_000)
+  assert.equal(h.engine.round.crashPoint, 2)
+  const opened = h.engine.log.map((line) => line.text).find((line) => line.includes('schedule 1/1'))
+  assert.ok(opened)
+  assert.match(opened ?? '', new RegExp(`planned ${planned} · launched ${planned}`))
+  assert.equal((opened ?? '').includes('delayed'), false)
 })
 
 test('demo sources do not import the real app', () => {

@@ -72,7 +72,7 @@ button.warn { background: var(--gold); color: #1a1200; font-weight: 800; border:
 h2 { margin: 0 0 8px; font-size: 16px; }
 .demo-schedule { margin: 12px 0; }
 .schedule-list { max-height: 320px; overflow: auto; margin: 8px 0; }
-.schedule-row { display: grid; grid-template-columns: 36px 110px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 6px; border-radius: 8px; }
+.schedule-row { display: grid; grid-template-columns: 36px 110px minmax(120px, 150px) minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 6px; border-radius: 8px; }
 .schedule-row input { margin: 0; }
 .schedule-row.current { outline: 2px solid var(--gold); background: #1a2744; }
 .schedule-row.next { outline: 1px solid #3d8bfd; }
