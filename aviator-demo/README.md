@@ -26,7 +26,7 @@ Presenter controls apply to the **next** round only:
 
 - crash multiplier (1.10–100)
 - takeoff, how long betting stays open
-- fly away, how long the flight lasts (`0` keeps the natural curve)
+- fly away is kept on the form, and the flight still uses the natural curve
 - mark selected players to win — they cash out 0.01x under the crash
 - **Automatic** clears that queue and returns the following round to the hash
 
