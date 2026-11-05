@@ -112,7 +112,7 @@ export async function createApp(engine: DemoEngine = new DemoEngine()) {
   app.post('/api/admin/schedule/start', async (req, reply) => {
     try {
       const body = readBody(req.body)
-      engine.startSchedule({ capSec: body.capSec, entries: body.entries, mode: body.mode, startAt: body.startAt })
+      engine.startSchedule({ capSec: body.capSec, entries: body.entries })
       return engine.adminView()
     } catch (err) {
       return sendError(reply, err)

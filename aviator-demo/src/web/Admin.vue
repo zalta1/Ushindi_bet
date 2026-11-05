@@ -2,7 +2,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import Flight from './Flight.vue'
 import { demoApi } from './demo-api'
-import { estimateStarts, exceedsCap } from '../server/schedule-estimate'
+import { exceedsCap } from '../server/schedule-estimate'
 
 interface PlayerRow {
   id: string
@@ -22,16 +22,13 @@ interface PlayerRow {
 }
 
 interface ScheduleSnap {
-  status: 'idle' | 'armed' | 'running' | 'paused'
-  mode: 'sequence' | 'timed'
+  status: 'idle' | 'running' | 'paused'
   finished: boolean
-  startAt: string | null
-  countdown: string
   capSec: number
   cursor: number
   total: number
   progress: string
-  entries: { crash: number, at: string | null, overCap: boolean, winnerIds: string[], winnerNames: string[], state: 'done' | 'current' | 'next' | 'upcoming' }[]
+  entries: { crash: number, overCap: boolean, winnerIds: string[], winnerNames: string[], state: 'done' | 'current' | 'next' | 'upcoming' }[]
 }
 
 interface Snap {
@@ -64,7 +61,7 @@ interface Snap {
   players: PlayerRow[]
   log: { id: number, at: number, kind: string, text: string }[]
   schedule: ScheduleSnap
-  nairobiNow: string
+  eatNow: string
 }
 
 const snap = ref<Snap | null>(null)
@@ -79,8 +76,6 @@ const DEFAULT_ODDS = [1.2, 3.5, 2.1, 1.5, 5, 1.8, 2.4, 8, 1.15, 4.2]
 let rowKey = 1
 const rows = ref(DEFAULT_ODDS.map((crash) => ({ key: rowKey++, crash, winnerIds: [] as string[] })))
 const capSec = ref(3)
-const scheduleMode = ref<'sequence' | 'timed'>('sequence')
-const startAt = ref('')
 const paste = ref('')
 let source: EventSource | null = null
 let poll: ReturnType<typeof setInterval> | undefined
@@ -162,8 +157,6 @@ function explain(err: unknown) {
     winners_invalid: 'Pick players from the list.',
     schedule_too_short: 'Enter at least one odd.',
     schedule_odd_invalid: 'Each odd must be from 1.00 to 1000.',
-    schedule_time_invalid: 'The start time must be HH:MM:SS Nairobi time.',
-    schedule_time_past: 'The start time must still be ahead on the Nairobi clock.',
     schedule_cap_invalid: 'Time cap must be from 0.5 to 60 seconds.',
     schedule_not_running: 'Start the schedule first.',
     schedule_not_paused: 'The schedule is not paused.',
@@ -184,20 +177,6 @@ function loadPasted() {
   }
   error.value = ''
   rows.value = good.map((crash) => ({ key: rowKey++, crash, winnerIds: [] as string[] }))
-}
-
-function clockPlus(hms: string, addMs: number) {
-  const [hh, mm, ss] = hms.split(':').map(Number)
-  if (![hh, mm, ss].every((part) => Number.isFinite(part))) return ''
-  const total = hh * 3600 + mm * 60 + ss + Math.round(addMs / 1000)
-  const norm = ((total % 86400) + 86400) % 86400
-  return [Math.floor(norm / 3600), Math.floor((norm % 3600) / 60), norm % 60].map((part) => String(part).padStart(2, '0')).join(':')
-}
-
-function previewAt(index: number) {
-  if (scheduleMode.value !== 'timed' || !startAt.value) return ''
-  const offsets = estimateStarts(0, rows.value.map((row) => Number(row.crash) || 1), Math.round(Number(capSec.value) * 1000))
-  return clockPlus(startAt.value, offsets[index] ?? 0)
 }
 
 function rowOverCap(crash: number) {
@@ -227,14 +206,10 @@ async function startSchedule() {
   busy.value = true
   try {
     applySnap(await demoApi<Snap>('/api/admin/schedule/start', {
-      mode: scheduleMode.value,
       capSec: capSec.value,
-      startAt: scheduleMode.value === 'timed' ? startAt.value : undefined,
       entries: rows.value.map((row) => ({ crash: row.crash, winnerIds: row.winnerIds })),
     }))
-    saved.value = scheduleMode.value === 'timed'
-      ? 'Saved. The list starts itself at that Nairobi time.'
-      : 'Schedule queued. It starts on the next round.'
+    saved.value = 'Schedule queued. It starts on the next round.'
   } catch (err) {
     error.value = explain(err)
   } finally {
@@ -365,20 +340,14 @@ async function automatic() {
 
     <section class="card demo-schedule" data-testid="demo-schedule">
       <h2>Odds schedule</h2>
-      <p class="muted" v-if="scheduleMode === 'sequence'">Any number of odds, played back to back on the normal climb. The time cap does not speed the plane. An odd that needs longer is flagged and still flies at that speed.</p>
-      <p class="muted" v-else>Paste the odds and one Nairobi start time, then Save. At that time the odds play back to back on the same curve as Automatic. The cap does not speed them up. If a round is still flying, the first odd starts when it ends and is logged as delayed.</p>
-      <p data-testid="demo-nairobi-clock">Nairobi {{ snap?.nairobiNow ?? '—' }}</p>
-      <p v-if="snap?.schedule?.countdown" data-testid="demo-schedule-countdown">{{ snap.schedule.countdown }}</p>
+      <p class="muted">Press Start and the odds play back to back on the same climb as Automatic. The time cap does not speed the plane. An odd that needs longer is flagged and still flies at that speed. After the last odd, play returns to Automatic.</p>
+      <p data-testid="demo-eat-clock">East African Time (EAT) {{ snap?.eatNow ?? '—' }}</p>
       <p data-testid="demo-schedule-progress">{{ snap?.schedule?.progress ?? 'Schedule idle' }}</p>
-      <div class="demo-actions" v-if="snap?.schedule?.status !== 'running' && snap?.schedule?.status !== 'paused'">
-        <button type="button" :class="{ active: scheduleMode === 'sequence' }" data-testid="demo-schedule-mode-sequence" @click="scheduleMode = 'sequence'">Back to back</button>
-        <button type="button" :class="{ active: scheduleMode === 'timed' }" data-testid="demo-schedule-mode-timed" @click="scheduleMode = 'timed'">Timed</button>
-      </div>
       <label>Time cap (seconds)
         <input type="number" step="0.5" min="0.5" max="60" v-model.number="capSec" data-testid="demo-schedule-cap" :disabled="snap?.schedule?.status === 'running'" />
       </label>
 
-      <div v-if="snap?.schedule?.status === 'armed' || snap?.schedule?.status === 'running' || snap?.schedule?.status === 'paused' || snap?.schedule?.finished" class="schedule-list" data-testid="demo-schedule-live">
+      <div v-if="snap?.schedule?.status === 'running' || snap?.schedule?.status === 'paused' || snap?.schedule?.finished" class="schedule-list" data-testid="demo-schedule-live">
         <div
           v-for="(entry, index) in snap.schedule.entries"
           :key="index"
@@ -390,24 +359,19 @@ async function automatic() {
         >
           <span class="schedule-tick">{{ entry.state === 'done' ? '✓' : (index + 1) }}</span>
           <b>{{ entry.crash.toFixed(2) }}x</b>
-          <span v-if="entry.at" data-testid="demo-schedule-estimate">{{ entry.at }}</span>
           <span v-if="entry.overCap" class="schedule-flag" data-testid="demo-schedule-over-cap">Over cap — normal speed</span>
           <span class="muted">{{ entry.winnerNames.length ? entry.winnerNames.join(', ') : 'no marked winners' }}</span>
           <span class="schedule-tag">{{ entry.state }}</span>
         </div>
       </div>
       <div v-else class="schedule-list" data-testid="demo-schedule-editor">
-        <label v-if="scheduleMode === 'timed'">Paste odds
+        <label>Paste odds
           <textarea v-model="paste" rows="3" data-testid="demo-schedule-paste" placeholder="2.00, 5.50, 1.40"></textarea>
         </label>
-        <button v-if="scheduleMode === 'timed'" type="button" data-testid="demo-schedule-load" @click="loadPasted">Load list</button>
-        <label v-if="scheduleMode === 'timed'">Start time (Nairobi)
-          <input type="time" step="1" v-model="startAt" data-testid="demo-schedule-start-at" />
-        </label>
+        <button type="button" data-testid="demo-schedule-load" @click="loadPasted">Load list</button>
         <div v-for="(row, index) in rows" :key="row.key" class="schedule-row" data-testid="demo-schedule-edit">
           <span>{{ index + 1 }}</span>
           <input type="number" step="0.01" min="1" max="1000" v-model.number="row.crash" data-testid="demo-schedule-odd" />
-          <span v-if="previewAt(index)" data-testid="demo-schedule-estimate">{{ previewAt(index) }}</span>
           <span v-if="rowOverCap(row.crash)" class="schedule-flag" data-testid="demo-schedule-over-cap">Over cap — normal speed</span>
           <span class="muted">{{ row.winnerIds.length ? `${row.winnerIds.length} winner(s)` : 'optional winners' }}</span>
           <span class="schedule-actions">
@@ -421,12 +385,11 @@ async function automatic() {
       </div>
 
       <div class="demo-actions">
-        <button v-if="scheduleMode === 'sequence' && snap?.schedule?.status !== 'armed' && snap?.schedule?.status !== 'running' && snap?.schedule?.status !== 'paused'" type="button" class="primary" :disabled="busy" data-testid="demo-schedule-start" @click="startSchedule">Start</button>
-        <button v-if="scheduleMode === 'timed' && snap?.schedule?.status !== 'armed' && snap?.schedule?.status !== 'running' && snap?.schedule?.status !== 'paused'" type="button" class="primary" :disabled="busy" data-testid="demo-schedule-save" @click="startSchedule">Save</button>
-        <button v-if="snap?.schedule?.status === 'running' || snap?.schedule?.status === 'armed'" type="button" class="warn" :disabled="busy" data-testid="demo-schedule-pause" @click="pauseSchedule">Pause</button>
+        <button v-if="snap?.schedule?.status !== 'running' && snap?.schedule?.status !== 'paused'" type="button" class="primary" :disabled="busy" data-testid="demo-schedule-start" @click="startSchedule">Start</button>
+        <button v-if="snap?.schedule?.status === 'running'" type="button" class="warn" :disabled="busy" data-testid="demo-schedule-pause" @click="pauseSchedule">Pause</button>
         <button v-if="snap?.schedule?.status === 'paused'" type="button" class="primary" :disabled="busy" data-testid="demo-schedule-resume" @click="resumeSchedule">Resume</button>
-        <button v-if="snap?.schedule?.status === 'armed' || snap?.schedule?.status === 'running' || snap?.schedule?.status === 'paused'" type="button" :disabled="busy" data-testid="demo-schedule-stop" @click="stopSchedule">Stop</button>
-        <button v-if="snap?.schedule?.status === 'armed' || snap?.schedule?.status === 'running' || snap?.schedule?.status === 'paused' || snap?.schedule?.finished" type="button" :disabled="busy" data-testid="demo-schedule-clear" @click="stopSchedule">Clear</button>
+        <button v-if="snap?.schedule?.status === 'running' || snap?.schedule?.status === 'paused'" type="button" :disabled="busy" data-testid="demo-schedule-stop" @click="stopSchedule">Stop</button>
+        <button v-if="snap?.schedule?.status === 'running' || snap?.schedule?.status === 'paused' || snap?.schedule?.finished" type="button" :disabled="busy" data-testid="demo-schedule-clear" @click="stopSchedule">Clear</button>
       </div>
     </section>
 
